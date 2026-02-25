@@ -76,7 +76,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun suFull(cmd: String): Triple<Int, String, String> {
         return try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+            // -M (mount-master) 使用 Magisk 全局挂载命名空间，绕过 SELinux 限制
+            val p = Runtime.getRuntime().exec(arrayOf("su", "-M", "-c", cmd))
             val stdout = p.inputStream.bufferedReader().readText().trim()
             val stderr = p.errorStream.bufferedReader().readText().trim()
             p.waitFor()
