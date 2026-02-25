@@ -1,7 +1,9 @@
 package com.tool.dcstoragetool
 
 import android.annotation.SuppressLint
+import android.content.ClipboardManager
 import android.content.ContentValues
+import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
 import android.util.Log
@@ -57,6 +59,16 @@ class MainActivity : AppCompatActivity() {
         binding.btnWrite.setOnClickListener { doWrite() }
         binding.btnGenerate.setOnClickListener {
             binding.etNewUuid.setText(UUID.randomUUID().toString())
+        }
+        binding.btnPaste.setOnClickListener {
+            val cm   = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()?.trim()
+            if (!text.isNullOrEmpty()) {
+                binding.etNewUuid.setText(text)
+                binding.etNewUuid.setSelection(text.length)
+            } else {
+                toast("剪贴板为空")
+            }
         }
     }
 

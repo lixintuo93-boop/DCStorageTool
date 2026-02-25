@@ -1,186 +1,210 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#F0F2F5">
+    android:background="#F0F2F5"
+    android:fillViewport="true">
 
-    <!-- 标题 -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="DCStorage UUID 管理"
-        android:textSize="20sp"
-        android:textStyle="bold"
-        android:textColor="#1A237E"
-        android:gravity="center"
-        android:layout_marginBottom="20dp"
-        android:layout_marginTop="8dp"/>
-
-    <!-- 配置卡片 -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:cardElevation="4dp"
-        app:cardCornerRadius="10dp"
-        android:layout_marginBottom="14dp">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="配置参数"
-                android:textStyle="bold"
-                android:textSize="13sp"
-                android:textColor="#1565C0"
-                android:layout_marginBottom="10dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Hospital ID"
-                android:textSize="11sp"
-                android:textColor="#9E9E9E"/>
-            <EditText
-                android:id="@+id/et_hospital_id"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:inputType="number"
-                android:textSize="15sp"
-                android:background="@null"
-                android:paddingVertical="4dp"/>
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
-                android:layout_marginBottom="10dp"/>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="存储 Key"
-                android:textSize="11sp"
-                android:textColor="#9E9E9E"/>
-            <EditText
-                android:id="@+id/et_db_key"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:textSize="15sp"
-                android:background="@null"
-                android:paddingVertical="4dp"/>
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"/>
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
-    <!-- 读取按钮 -->
-    <Button
-        android:id="@+id/btn_read"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="读  取"
-        android:textSize="15sp"
-        android:letterSpacing="0.1"
-        android:backgroundTint="#1565C0"
-        android:layout_marginBottom="14dp"/>
-
-    <!-- UUID 结果卡片 -->
-    <androidx.cardview.widget.CardView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        app:cardElevation="4dp"
-        app:cardCornerRadius="10dp"
-        android:layout_marginBottom="14dp">
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
-
-            <!-- 当前 UUID -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="当前 UUID"
-                android:textStyle="bold"
-                android:textSize="13sp"
-                android:textColor="#1565C0"
-                android:layout_marginBottom="6dp"/>
-            <TextView
-                android:id="@+id/tv_decrypted"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="—"
-                android:textSize="14sp"
-                android:fontFamily="monospace"
-                android:textColor="#2E7D32"
-                android:textIsSelectable="true"
-                android:padding="10dp"
-                android:background="#F1F8E9"
-                android:layout_marginBottom="14dp"/>
-
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"
-                android:layout_marginBottom="12dp"/>
-
-            <!-- 新 UUID -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="新 UUID"
-                android:textStyle="bold"
-                android:textSize="13sp"
-                android:textColor="#1565C0"
-                android:layout_marginBottom="4dp"/>
-            <EditText
-                android:id="@+id/et_new_uuid"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:hint="输入或生成新的 UUID"
-                android:fontFamily="monospace"
-                android:textSize="14sp"
-                android:background="@null"
-                android:paddingVertical="4dp"/>
-            <View
-                android:layout_width="match_parent"
-                android:layout_height="1dp"
-                android:background="#E0E0E0"/>
-        </LinearLayout>
-    </androidx.cardview.widget.CardView>
-
-    <!-- 生成 + 写入按钮 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
-        <Button
-            android:id="@+id/btn_generate"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="48dp"
-            android:text="随机 UUID"
-            android:textSize="14sp"
-            android:backgroundTint="#546E7A"
-            android:layout_marginEnd="8dp"/>
-        <Button
-            android:id="@+id/btn_write"
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="48dp"
-            android:text="写  入"
-            android:textSize="14sp"
-            android:letterSpacing="0.1"
-            android:backgroundTint="#C62828"/>
-    </LinearLayout>
+        android:orientation="vertical"
+        android:padding="16dp">
 
-</LinearLayout>
+        <!-- 标题 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="DCStorage UUID 管理"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:textColor="#1A237E"
+            android:gravity="center"
+            android:layout_marginBottom="20dp"
+            android:layout_marginTop="8dp"/>
+
+        <!-- 配置卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="10dp"
+            android:layout_marginBottom="14dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="配置参数"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:textColor="#1565C0"
+                    android:layout_marginBottom="10dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Hospital ID"
+                    android:textSize="11sp"
+                    android:textColor="#9E9E9E"/>
+                <EditText
+                    android:id="@+id/et_hospital_id"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:inputType="number"
+                    android:textSize="15sp"
+                    android:background="@null"
+                    android:paddingVertical="4dp"/>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"
+                    android:layout_marginBottom="10dp"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="存储 Key"
+                    android:textSize="11sp"
+                    android:textColor="#9E9E9E"/>
+                <EditText
+                    android:id="@+id/et_db_key"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:textSize="15sp"
+                    android:background="@null"
+                    android:paddingVertical="4dp"/>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 读取按钮 -->
+        <Button
+            android:id="@+id/btn_read"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:text="读  取"
+            android:textSize="15sp"
+            android:letterSpacing="0.1"
+            android:backgroundTint="#1565C0"
+            android:layout_marginBottom="14dp"/>
+
+        <!-- UUID 结果卡片 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="10dp"
+            android:layout_marginBottom="14dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
+
+                <!-- 当前 UUID -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="当前 UUID"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:textColor="#1565C0"
+                    android:layout_marginBottom="6dp"/>
+                <TextView
+                    android:id="@+id/tv_decrypted"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="14sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#2E7D32"
+                    android:textIsSelectable="true"
+                    android:padding="10dp"
+                    android:background="#F1F8E9"
+                    android:layout_marginBottom="14dp"/>
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"
+                    android:layout_marginBottom="12dp"/>
+
+                <!-- 新 UUID 标题行 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:layout_marginBottom="4dp">
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_weight="1"
+                        android:layout_height="wrap_content"
+                        android:text="新 UUID"
+                        android:textStyle="bold"
+                        android:textSize="13sp"
+                        android:textColor="#1565C0"/>
+                    <Button
+                        android:id="@+id/btn_paste"
+                        android:layout_width="wrap_content"
+                        android:layout_height="32dp"
+                        android:text="粘 贴"
+                        android:textSize="12sp"
+                        android:backgroundTint="#1565C0"
+                        android:paddingHorizontal="14dp"/>
+                </LinearLayout>
+
+                <EditText
+                    android:id="@+id/et_new_uuid"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="输入或粘贴新的 UUID"
+                    android:fontFamily="monospace"
+                    android:textSize="14sp"
+                    android:inputType="text"
+                    android:background="@null"
+                    android:paddingVertical="4dp"/>
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="#E0E0E0"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 生成 + 写入按钮 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+            <Button
+                android:id="@+id/btn_generate"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="48dp"
+                android:text="随机 UUID"
+                android:textSize="14sp"
+                android:backgroundTint="#546E7A"
+                android:layout_marginEnd="8dp"/>
+            <Button
+                android:id="@+id/btn_write"
+                android:layout_width="0dp"
+                android:layout_weight="1"
+                android:layout_height="48dp"
+                android:text="写  入"
+                android:textSize="14sp"
+                android:letterSpacing="0.1"
+                android:backgroundTint="#C62828"/>
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>
