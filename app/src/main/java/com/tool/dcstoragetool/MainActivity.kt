@@ -19,7 +19,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         const val TARGET_PKG      = "com.ewell.guahao.beijingguanganmen"
-        const val DB_PATH         = "/data/data/$TARGET_PKG/databases/DCStorage"
+        const val DB_PATH         = "/data/user/0/$TARGET_PKG/databases/DCStorage"
         const val DEF_HOSPITAL_ID = "10097"
         const val DEF_DB_KEY      = "$DEF_HOSPITAL_ID.product.deviceId"
     }
