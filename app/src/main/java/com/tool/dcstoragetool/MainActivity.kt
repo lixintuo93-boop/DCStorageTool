@@ -36,15 +36,12 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.etHospitalId.setText(DEF_HOSPITAL_ID)
-        binding.etDbKey.setText(DEF_DB_KEY)
-
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    Log.d(TAG, "CryptoJS loaded")
-                    binding.btnRead.isEnabled = true
+                    Log.d(TAG, "CryptoJS loaded, auto reading...")
+                    doRead()
                 }
                 override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                     Log.e(TAG, "CryptoJS error: $description")
@@ -54,8 +51,6 @@ class MainActivity : AppCompatActivity() {
             loadUrl("file:///android_asset/index.html")
         }
 
-        binding.btnRead.isEnabled = false
-        binding.btnRead.setOnClickListener { doRead() }
         binding.btnWrite.setOnClickListener { doWrite() }
         binding.btnGenerate.setOnClickListener {
             binding.etNewUuid.setText(UUID.randomUUID().toString())
@@ -97,10 +92,6 @@ class MainActivity : AppCompatActivity() {
     // ─── 读取 ────────────────────────────────────────────────────
 
     private fun doRead() {
-        val hid = binding.etHospitalId.text.toString().trim()
-        val key = binding.etDbKey.text.toString().trim()
-        binding.tvDecrypted.text = "读取中..."
-
         Thread {
             val tmp   = tmpDb.absolutePath
             val myUid = android.os.Process.myUid()
@@ -110,7 +101,6 @@ class MainActivity : AppCompatActivity() {
             val findOut    = suFull("find /data/user/0/$TARGET_PKG /data/data/$TARGET_PKG -name 'DCStorage' 2>/dev/null")
             val realDbPath = findOut.second.lines()
                 .firstOrNull { it.contains("DCStorage") && !it.contains("media") } ?: DB_PATH
-            Log.d(TAG, "db path: $realDbPath")
 
             val cpOk    = su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
             val tmpFile = File(tmp)
@@ -129,10 +119,10 @@ class MainActivity : AppCompatActivity() {
                     return@Thread
                 }
 
-                val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(key))
+                val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(DEF_DB_KEY))
                 if (!cur.moveToFirst()) {
                     cur.close(); db.close()
-                    ui { binding.tvDecrypted.text = "—"; toast("未找到 Key: $key") }
+                    ui { binding.tvDecrypted.text = "—"; toast("未找到 Key") }
                     return@Thread
                 }
 
@@ -141,16 +131,13 @@ class MainActivity : AppCompatActivity() {
 
                 ui {
                     val escaped = raw.replace("'", "\\'")
-                    webView.evaluateJavascript("decrypt('$hid','$escaped')") { res ->
-                        // evaluateJavascript 返回 JSON 编码字符串，需两步去引号：
-                        // 1. 去掉外层 JS 字符串引号  2. 去掉内层 JSON 值引号
+                    webView.evaluateJavascript("decrypt('$DEF_HOSPITAL_ID','$escaped')") { res ->
                         val plain = res
-                            ?.removeSurrounding("\"")   // 去外层
-                            ?.replace("\\\"", "")       // 去内层 \"..\"
+                            ?.removeSurrounding("\"")
+                            ?.replace("\\\"", "")
                             ?: ""
                         binding.tvDecrypted.text = plain
                         binding.etNewUuid.setText(plain)
-                        toast("读取成功")
                     }
                 }
             } catch (e: Exception) {
@@ -163,12 +150,10 @@ class MainActivity : AppCompatActivity() {
     // ─── 写入 ────────────────────────────────────────────────────
 
     private fun doWrite() {
-        val hid    = binding.etHospitalId.text.toString().trim()
-        val key    = binding.etDbKey.text.toString().trim()
         val newVal = binding.etNewUuid.text.toString().trim()
         if (newVal.isEmpty()) { toast("请输入新的 UUID"); return }
 
-        webView.evaluateJavascript("encrypt('$hid', '\"$newVal\"')") { encRes ->
+        webView.evaluateJavascript("encrypt('$DEF_HOSPITAL_ID', '\"$newVal\"')") { encRes ->
             val encrypted = encRes?.removeSurrounding("\"") ?: ""
             if (encrypted.isEmpty() || encrypted.startsWith("ERROR")) {
                 toast("加密失败"); return@evaluateJavascript
@@ -191,7 +176,7 @@ class MainActivity : AppCompatActivity() {
                         db.close(); ui { toast("未找到数据表") }; return@Thread
                     }
                     val cv   = ContentValues().apply { put("value", encrypted) }
-                    val rows = db.update(tableName, cv, "key=?", arrayOf(key))
+                    val rows = db.update(tableName, cv, "key=?", arrayOf(DEF_DB_KEY))
                     db.close()
 
                     if (rows > 0) {
@@ -225,7 +210,6 @@ class MainActivity : AppCompatActivity() {
         while (cur.moveToNext()) tables.add(cur.getString(0))
         cur.close()
 
-        // 优先选 DC_*_storage（DCloud 专属表），其次选其他有 key/value 列的表
         val dcTable  = tables.firstOrNull { it.matches(Regex("DC_\\d+_storage")) }
         val fallback = tables.firstOrNull { name ->
             if (name == "android_metadata") return@firstOrNull false
@@ -235,7 +219,7 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) { false }
         }
         val match = dcTable ?: fallback
-        Log.d(TAG, "tables=$tables selected=$match (dc=$dcTable fallback=$fallback)")
+        Log.d(TAG, "tables=$tables selected=$match")
         return match
     }
 
