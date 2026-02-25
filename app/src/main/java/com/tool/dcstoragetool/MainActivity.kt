@@ -118,8 +118,11 @@ class MainActivity : AppCompatActivity() {
             appendLog("\n--- Step1: 删除旧临时文件 ---")
             su("rm -f '$tmp'")
 
-            appendLog("\n--- Step2: 检查源文件是否存在 ---")
-            su("ls -la '$DB_PATH'")
+            appendLog("\n--- Step2: 搜索数据库真实位置 ---")
+            su("find /data -name 'DCStorage' 2>/dev/null")
+            su("ls /data/user/ 2>/dev/null")
+            su("ls /data/user/0/$TARGET_PKG/ 2>/dev/null")
+            su("ls /data/data/$TARGET_PKG/ 2>/dev/null")
 
             appendLog("\n--- Step3: 复制 + chown ---")
             val cpOk = su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
