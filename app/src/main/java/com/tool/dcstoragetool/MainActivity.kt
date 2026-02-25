@@ -260,20 +260,27 @@ class MainActivity : AppCompatActivity() {
         cur.close()
         appendLog("  所有表: $tables")
 
-        // 找有 key/value 列的表，并打印样本数据
-        val match = tables.firstOrNull { name ->
+        // 优先选 DC_*_storage（DCloud 专属表），其次才是其他有 key/value 列的表
+        val dcTable = tables.firstOrNull { it.matches(Regex("DC_\\d+_storage")) }
+        val fallback = tables.firstOrNull { name ->
+            if (name == "android_metadata") return@firstOrNull false
             try {
-                val c = db.rawQuery("SELECT key, value FROM $name LIMIT 3", null)
-                val ok = c.columnCount >= 2
-                if (ok) {
-                    while (c.moveToNext()) {
-                        appendLog("  [$name] key=${c.getString(0).take(60)}")
-                    }
-                }
-                c.close(); ok
+                val c = db.rawQuery("SELECT key, value FROM $name LIMIT 1", null)
+                val ok = c.columnCount >= 2; c.close(); ok
             } catch (e: Exception) { false }
         }
-        appendLog("  选用表: $match")
+        val match = dcTable ?: fallback
+        appendLog("  选用表: $match（DC专属表: $dcTable, 备选: $fallback）")
+
+        // 打印选中表的前几行 key
+        if (match != null) {
+            try {
+                val c = db.rawQuery("SELECT key FROM $match LIMIT 10", null)
+                appendLog("  [$match] 前10行 key:")
+                while (c.moveToNext()) appendLog("    > ${c.getString(0)}")
+                c.close()
+            } catch (e: Exception) { }
+        }
         return match
     }
 
