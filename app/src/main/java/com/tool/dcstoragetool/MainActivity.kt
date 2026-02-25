@@ -4,7 +4,6 @@ import android.annotation.SuppressLint
 import android.content.ContentValues
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
-import android.os.Environment
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.appcompat.app.AppCompatActivity
@@ -25,10 +24,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
     private var jsReady = false
 
-    // 用 /sdcard/ 作为中转，规避 SELinux 对 /data/local/tmp 的 chmod 限制
-    private val tmpDb get() = File(
-        Environment.getExternalStorageDirectory(), "DCStorage_tmp"
-    )
+    // 复制到 App 私有目录，无需任何存储权限
+    private val tmpDb get() = File(cacheDir, "DCStorage_tmp")
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -90,9 +87,10 @@ class MainActivity : AppCompatActivity() {
         status("⏳ 复制数据库...")
         Thread {
             val tmp = tmpDb.absolutePath
-            // 先删旧文件，再复制（/sdcard 不需要 chmod）
+            // 获取本 App 的 UID，复制后 chown 给自己，无需存储权限
+            val myUid = android.os.Process.myUid()
             su("rm -f '$tmp'")
-            if (!su("cp '$DB_PATH' '$tmp'")) {
+            if (!su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")) {
                 ui { status("❌ 复制失败，请确认已 ROOT 且目标 App 已安装") }
                 return@Thread
             }
@@ -151,8 +149,9 @@ class MainActivity : AppCompatActivity() {
             }
             Thread {
                 val tmp = tmpDb.absolutePath
+                val myUid = android.os.Process.myUid()
                 su("rm -f '$tmp'")
-                su("cp '$DB_PATH' '$tmp'")
+                su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
                 try {
                     val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READWRITE)
                     val tableName = findTable(db) ?: run {
