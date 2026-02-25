@@ -1,160 +1,115 @@
 <?xml version="1.0" encoding="utf-8"?>
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
     android:background="#F5F5F5">
 
-    <LinearLayout
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="16dp">
+        android:text="DCStorage 查看/修改工具"
+        android:textSize="17sp"
+        android:textStyle="bold"
+        android:textColor="#1A237E"
+        android:layout_marginBottom="8dp"/>
 
-        <!-- 标题 -->
-        <TextView
+    <!-- 配置 -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardElevation="3dp"
+        app:cardCornerRadius="6dp"
+        android:layout_marginBottom="8dp">
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="DCStorage 查看 / 修改工具"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:textColor="#1A237E"
-            android:layout_marginBottom="16dp" />
+            android:orientation="vertical"
+            android:padding="10dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="Hospital ID" android:textStyle="bold" android:textSize="12sp"/>
+            <EditText android:id="@+id/et_hospital_id"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:inputType="number" android:textSize="13sp"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="存储 Key" android:textStyle="bold" android:textSize="12sp" android:layout_marginTop="6dp"/>
+            <EditText android:id="@+id/et_db_key"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:textSize="13sp"/>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
 
-        <!-- 配置卡片 -->
-        <androidx.cardview.widget.CardView
-            xmlns:app="http://schemas.android.com/apk/res-auto"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardElevation="4dp"
-            app:cardCornerRadius="8dp"
-            android:layout_marginBottom="12dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="Hospital ID" android:textStyle="bold" />
-                <EditText
-                    android:id="@+id/et_hospital_id"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:inputType="number"
-                    android:background="@android:drawable/editbox_background" />
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="存储 Key" android:textStyle="bold" android:layout_marginTop="8dp" />
-                <EditText
-                    android:id="@+id/et_db_key"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:background="@android:drawable/editbox_background" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 读取按钮 -->
-        <Button
-            android:id="@+id/btn_read"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="读取当前值"
-            android:backgroundTint="#1565C0"
-            android:layout_marginBottom="12dp" />
-
-        <!-- 当前值卡片 -->
-        <androidx.cardview.widget.CardView
-            xmlns:app="http://schemas.android.com/apk/res-auto"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardElevation="4dp"
-            app:cardCornerRadius="8dp"
-            android:layout_marginBottom="12dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="加密原文（Base64）" android:textStyle="bold" android:textColor="#555" />
-                <TextView
-                    android:id="@+id/tv_raw"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="—"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:textColor="#E65100"
-                    android:layout_marginTop="4dp" />
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="解密结果（UUID）" android:textStyle="bold" android:textColor="#555"
-                    android:layout_marginTop="10dp"/>
-                <TextView
-                    android:id="@+id/tv_decrypted"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="—"
-                    android:textSize="14sp"
-                    android:fontFamily="monospace"
-                    android:textColor="#1B5E20"
-                    android:layout_marginTop="4dp" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 修改卡片 -->
-        <androidx.cardview.widget.CardView
-            xmlns:app="http://schemas.android.com/apk/res-auto"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardElevation="4dp"
-            app:cardCornerRadius="8dp"
-            android:layout_marginBottom="12dp">
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="12dp">
-
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
-                    android:text="新的 UUID 值" android:textStyle="bold" />
-                <EditText
-                    android:id="@+id/et_new_uuid"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="输入或随机生成 UUID"
-                    android:fontFamily="monospace"
-                    android:background="@android:drawable/editbox_background" />
-
-                <Button
-                    android:id="@+id/btn_generate"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="随机生成 UUID"
-                    android:backgroundTint="#546E7A"
-                    android:layout_marginTop="8dp" />
-
-                <Button
-                    android:id="@+id/btn_write"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="写入新值"
-                    android:backgroundTint="#B71C1C"
-                    android:layout_marginTop="8dp" />
-            </LinearLayout>
-        </androidx.cardview.widget.CardView>
-
-        <!-- 状态栏 -->
-        <TextView
-            android:id="@+id/tv_status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="初始化中..."
-            android:textSize="13sp"
-            android:padding="12dp"
-            android:background="#E3F2FD"
-            android:textColor="#0D47A1" />
-
+    <!-- 操作按钮 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_marginBottom="8dp">
+        <Button android:id="@+id/btn_read"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="读取" android:backgroundTint="#1565C0" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_generate"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="随机UUID" android:backgroundTint="#546E7A" android:layout_marginEnd="4dp"/>
+        <Button android:id="@+id/btn_write"
+            android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="写入" android:backgroundTint="#B71C1C"/>
     </LinearLayout>
-</ScrollView>
+
+    <!-- 结果 -->
+    <androidx.cardview.widget.CardView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:cardElevation="3dp"
+        app:cardCornerRadius="6dp"
+        android:layout_marginBottom="8dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:orientation="vertical" android:padding="10dp">
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="加密原文" android:textStyle="bold" android:textSize="12sp" android:textColor="#555"/>
+            <TextView android:id="@+id/tv_raw"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="—" android:textSize="11sp" android:fontFamily="monospace"
+                android:textColor="#E65100" android:textIsSelectable="true"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content"
+                android:text="解密结果" android:textStyle="bold" android:textSize="12sp"
+                android:textColor="#555" android:layout_marginTop="6dp"/>
+            <TextView android:id="@+id/tv_decrypted"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="—" android:textSize="13sp" android:fontFamily="monospace"
+                android:textColor="#1B5E20" android:textIsSelectable="true"/>
+            <EditText android:id="@+id/et_new_uuid"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:hint="新的 UUID" android:fontFamily="monospace" android:textSize="13sp"
+                android:layout_marginTop="6dp"/>
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- 日志区 -->
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:layout_marginBottom="4dp">
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="调试日志" android:textStyle="bold" android:textSize="12sp" android:textColor="#333"/>
+        <Button android:id="@+id/btn_copy_log"
+            android:layout_width="wrap_content" android:layout_height="32dp"
+            android:text="复制日志" android:textSize="11sp"
+            android:backgroundTint="#37474F" android:paddingHorizontal="10dp"/>
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="#1E1E1E">
+        <TextView
+            android:id="@+id/tv_log"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="等待操作..."
+            android:textSize="11sp"
+            android:fontFamily="monospace"
+            android:textColor="#A5D6A7"
+            android:padding="8dp"
+            android:textIsSelectable="true"/>
+    </ScrollView>
+
+</LinearLayout>

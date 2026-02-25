@@ -1,11 +1,15 @@
 package com.tool.dcstoragetool
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ContentValues
+import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.tool.dcstoragetool.databinding.ActivityMainBinding
 import java.io.File
@@ -14,17 +18,16 @@ import java.util.UUID
 class MainActivity : AppCompatActivity() {
 
     companion object {
-        const val TARGET_PKG  = "com.ewell.guahao.beijingguanganmen"
-        const val DB_PATH     = "/data/data/$TARGET_PKG/databases/DCStorage"
+        const val TARGET_PKG      = "com.ewell.guahao.beijingguanganmen"
+        const val DB_PATH         = "/data/data/$TARGET_PKG/databases/DCStorage"
         const val DEF_HOSPITAL_ID = "10097"
-        const val DEF_DB_KEY  = "$DEF_HOSPITAL_ID.product.deviceId"
+        const val DEF_DB_KEY      = "$DEF_HOSPITAL_ID.product.deviceId"
     }
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var webView: WebView
-    private var jsReady = false
+    private val log = StringBuilder()
 
-    // 复制到 App 私有目录，无需任何存储权限
     private val tmpDb get() = File(cacheDir, "DCStorage_tmp")
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -33,23 +36,33 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // 预填默认值
         binding.etHospitalId.setText(DEF_HOSPITAL_ID)
         binding.etDbKey.setText(DEF_DB_KEY)
-        binding.tvStatus.text = "⏳ 加载 CryptoJS..."
 
-        // 隐藏 WebView，仅用于 JS 加解密
+        // 日志区域长按可复制
+        binding.tvLog.setTextIsSelectable(true)
+
+        // 复制按钮
+        binding.btnCopyLog.setOnClickListener {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.setPrimaryClip(ClipData.newPlainText("debug_log", binding.tvLog.text))
+            Toast.makeText(this, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+        }
+
         webView = WebView(this).apply {
             settings.javaScriptEnabled = true
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(view: WebView?, url: String?) {
-                    jsReady = true
-                    binding.tvStatus.text = "✅ 就绪，可以读取数据"
+                    appendLog("✅ CryptoJS 加载完成")
                     binding.btnRead.isEnabled = true
+                }
+                override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                    appendLog("❌ CryptoJS 加载失败: $description (code=$errorCode)")
                 }
             }
             loadUrl("file:///android_asset/index.html")
         }
+        appendLog("App 启动，加载 CryptoJS...")
 
         binding.btnRead.isEnabled = false
         binding.btnRead.setOnClickListener { doRead() }
@@ -61,20 +74,28 @@ class MainActivity : AppCompatActivity() {
 
     // ─── Root 工具 ───────────────────────────────────────────────
 
-    private fun su(cmd: String): Boolean {
+    private fun suFull(cmd: String): Triple<Int, String, String> {
         return try {
-            Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-                .also { it.waitFor() }.exitValue() == 0
-        } catch (e: Exception) { false }
+            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
+            val stdout = p.inputStream.bufferedReader().readText().trim()
+            val stderr = p.errorStream.bufferedReader().readText().trim()
+            p.waitFor()
+            Triple(p.exitValue(), stdout, stderr)
+        } catch (e: Exception) {
+            Triple(-1, "", e.message ?: "exception")
+        }
+    }
+
+    private fun su(cmd: String): Boolean {
+        val (exit, stdout, stderr) = suFull(cmd)
+        appendLog("  CMD: $cmd")
+        appendLog("  EXIT: $exit | OUT: ${stdout.take(200)} | ERR: ${stderr.take(200)}")
+        return exit == 0
     }
 
     private fun suOut(cmd: String): String {
-        return try {
-            val p = Runtime.getRuntime().exec(arrayOf("su", "-c", cmd))
-            val out = p.inputStream.bufferedReader().readText().trim()
-            p.waitFor()
-            out
-        } catch (e: Exception) { "" }
+        val (_, stdout, _) = suFull(cmd)
+        return stdout
     }
 
     // ─── 读取 ────────────────────────────────────────────────────
@@ -82,51 +103,87 @@ class MainActivity : AppCompatActivity() {
     private fun doRead() {
         val hid = binding.etHospitalId.text.toString().trim()
         val key = binding.etDbKey.text.toString().trim()
-        if (hid.isEmpty() || key.isEmpty()) { status("❌ 请填写 Hospital ID 和 存储 Key"); return }
+        log.clear()
+        appendLog("========== 开始读取 ==========")
+        appendLog("HospitalId: $hid")
+        appendLog("DB Key: $key")
+        appendLog("DB 路径: $DB_PATH")
+        appendLog("临时路径: ${tmpDb.absolutePath}")
+        appendLog("App UID: ${android.os.Process.myUid()}")
 
-        status("⏳ 复制数据库...")
         Thread {
             val tmp = tmpDb.absolutePath
-            // 获取本 App 的 UID，复制后 chown 给自己，无需存储权限
             val myUid = android.os.Process.myUid()
+
+            appendLog("\n--- Step1: 删除旧临时文件 ---")
             su("rm -f '$tmp'")
-            if (!su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")) {
-                ui { status("❌ 复制失败，请确认已 ROOT 且目标 App 已安装") }
+
+            appendLog("\n--- Step2: 检查源文件是否存在 ---")
+            su("ls -la '$DB_PATH'")
+
+            appendLog("\n--- Step3: 复制 + chown ---")
+            val cpOk = su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
+
+            appendLog("\n--- Step4: 检查临时文件 ---")
+            val tmpFile = File(tmp)
+            appendLog("  tmpFile.exists()=${tmpFile.exists()} size=${tmpFile.length()}")
+            appendLog("  canRead=${tmpFile.canRead()}")
+
+            if (!cpOk || !tmpFile.exists()) {
+                appendLog("❌ 复制失败，终止")
                 return@Thread
             }
+
+            appendLog("\n--- Step5: 打开数据库 ---")
             try {
                 val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
+                appendLog("  数据库打开成功")
 
-                // 自动探测表名
+                appendLog("\n--- Step6: 查询所有表 ---")
+                val tables = mutableListOf<String>()
+                val tc = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null)
+                while (tc.moveToNext()) tables.add(tc.getString(0))
+                tc.close()
+                appendLog("  表列表: $tables")
+
                 val tableName = findTable(db)
+                appendLog("  选用表: $tableName")
+
                 if (tableName == null) {
-                    db.close()
-                    ui { status("❌ 未找到合适的数据表，请检查数据库结构") }
-                    return@Thread
+                    db.close(); appendLog("❌ 未找到合适表"); return@Thread
                 }
 
+                appendLog("\n--- Step7: 查询 Key ---")
                 val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(key))
+                appendLog("  查询结果行数: ${cur.count}")
+
                 if (!cur.moveToFirst()) {
-                    cur.close(); db.close()
-                    ui { status("❌ 未找到 key: $key（表: $tableName）") }
-                    return@Thread
+                    // 打印所有 key 帮助定位
+                    appendLog("  ⚠️ 未找到指定 key，列出所有 key:")
+                    val all = db.rawQuery("SELECT key FROM $tableName", null)
+                    while (all.moveToNext()) appendLog("    > ${all.getString(0)}")
+                    all.close()
+                    cur.close(); db.close(); return@Thread
                 }
+
                 val raw = cur.getString(0)
                 cur.close(); db.close()
+                appendLog("  原始密文: $raw")
 
                 ui {
                     binding.tvRaw.text = raw
-                    status("⏳ 解密中...")
+                    appendLog("\n--- Step8: 解密 ---")
                     val escaped = raw.replace("'", "\\'")
                     webView.evaluateJavascript("decrypt('$hid','$escaped')") { res ->
+                        appendLog("  解密结果: $res")
                         val plain = res?.removeSurrounding("\"") ?: ""
                         binding.tvDecrypted.text = plain
                         binding.etNewUuid.setText(plain.removeSurrounding("\""))
-                        status("✅ 读取成功（表: $tableName）")
+                        appendLog("✅ 读取完成")
                     }
                 }
             } catch (e: Exception) {
-                ui { status("❌ 数据库错误: ${e.message}") }
+                appendLog("❌ 异常: ${e.javaClass.simpleName}: ${e.message}")
             }
         }.start()
     }
@@ -137,40 +194,48 @@ class MainActivity : AppCompatActivity() {
         val hid    = binding.etHospitalId.text.toString().trim()
         val key    = binding.etDbKey.text.toString().trim()
         val newVal = binding.etNewUuid.text.toString().trim()
-        if (newVal.isEmpty()) { status("❌ 请输入新的 UUID"); return }
+        if (newVal.isEmpty()) { appendLog("❌ 请输入新的 UUID"); return }
 
-        status("⏳ 加密新值...")
-        // 原 app 存储的是 JSON.stringify(uuid) = '"uuid"'
+        log.clear()
+        appendLog("========== 开始写入 ==========")
+        appendLog("新值: $newVal")
+
         val jsCall = "encrypt('$hid', '\"$newVal\"')"
+        appendLog("JS调用: $jsCall")
+
         webView.evaluateJavascript(jsCall) { encRes ->
             val encrypted = encRes?.removeSurrounding("\"") ?: ""
+            appendLog("加密结果: $encrypted")
             if (encrypted.isEmpty() || encrypted.startsWith("ERROR")) {
-                status("❌ 加密失败: $encRes"); return@evaluateJavascript
+                appendLog("❌ 加密失败"); return@evaluateJavascript
             }
             Thread {
                 val tmp = tmpDb.absolutePath
                 val myUid = android.os.Process.myUid()
                 su("rm -f '$tmp'")
                 su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
+
                 try {
                     val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READWRITE)
                     val tableName = findTable(db) ?: run {
-                        db.close(); ui { status("❌ 未找到数据表") }; return@Thread
+                        db.close(); appendLog("❌ 未找到数据表"); return@Thread
                     }
                     val cv = ContentValues().apply { put("value", encrypted) }
                     val rows = db.update(tableName, cv, "key=?", arrayOf(key))
                     db.close()
+                    appendLog("更新行数: $rows")
 
                     if (rows > 0) {
                         val uid = suOut("stat -c '%u' '$DB_PATH'")
                         val ok  = su("cp '$tmp' '$DB_PATH'")
                         if (ok && uid.isNotEmpty()) su("chown $uid:$uid '$DB_PATH'")
-                        ui { status(if (ok) "✅ 写入成功！\n新 UUID: $newVal" else "⚠️ 写回失败，请手动检查 Root 权限") }
+                        appendLog(if (ok) "✅ 写入成功" else "❌ 写回失败")
+                        ui { binding.tvDecrypted.text = newVal }
                     } else {
-                        ui { status("❌ 更新行数为 0，key 不存在或表结构有误") }
+                        appendLog("❌ 更新行数为 0")
                     }
                 } catch (e: Exception) {
-                    ui { status("❌ 写入异常: ${e.message}") }
+                    appendLog("❌ 异常: ${e.message}")
                 }
             }.start()
         }
@@ -178,13 +243,12 @@ class MainActivity : AppCompatActivity() {
 
     // ─── 辅助 ────────────────────────────────────────────────────
 
-    /** 自动检测包含 key/value 列的表名 */
     private fun findTable(db: SQLiteDatabase): String? {
-        val candidates = mutableListOf<String>()
         val cur = db.rawQuery("SELECT name FROM sqlite_master WHERE type='table'", null)
-        while (cur.moveToNext()) candidates.add(cur.getString(0))
+        val tables = mutableListOf<String>()
+        while (cur.moveToNext()) tables.add(cur.getString(0))
         cur.close()
-        return candidates.firstOrNull { name ->
+        return tables.firstOrNull { name ->
             try {
                 val c = db.rawQuery("SELECT key, value FROM $name LIMIT 1", null)
                 val ok = c.columnCount >= 2
@@ -193,6 +257,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun status(msg: String) { binding.tvStatus.text = msg }
+    private fun appendLog(msg: String) {
+        log.append(msg).append("\n")
+        runOnUiThread { binding.tvLog.text = log.toString() }
+    }
+
     private fun ui(block: () -> Unit) = runOnUiThread(block)
 }
