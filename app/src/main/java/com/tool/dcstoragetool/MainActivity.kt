@@ -119,14 +119,16 @@ class MainActivity : AppCompatActivity() {
             appendLog("\n--- Step1: 删除旧临时文件 ---")
             su("rm -f '$tmp'")
 
-            appendLog("\n--- Step2: 搜索数据库真实位置 ---")
-            su("find /data -name 'DCStorage' 2>/dev/null")
-            su("ls /data/user/ 2>/dev/null")
-            su("ls /data/user/0/$TARGET_PKG/ 2>/dev/null")
-            su("ls /data/data/$TARGET_PKG/ 2>/dev/null")
+            appendLog("\n--- Step2: 自动定位数据库 ---")
+            // 动态搜索，兼容所有手机路径
+            val findOut = suFull("find /data/user/0/$TARGET_PKG /data/data/$TARGET_PKG -name 'DCStorage' 2>/dev/null")
+            appendLog("  find结果: ${findOut.second}")
+            val realDbPath = findOut.second.lines().firstOrNull { it.contains("DCStorage") && !it.contains("media") }
+                ?: DB_PATH
+            appendLog("  使用路径: $realDbPath")
 
             appendLog("\n--- Step3: 复制 + chown ---")
-            val cpOk = su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
+            val cpOk = su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
 
             appendLog("\n--- Step4: 检查临时文件 ---")
             val tmpFile = File(tmp)
@@ -216,8 +218,12 @@ class MainActivity : AppCompatActivity() {
             Thread {
                 val tmp = tmpDb.absolutePath
                 val myUid = android.os.Process.myUid()
+                // 同样动态定位数据库路径
+                val findRes = suFull("find /data/user/0/$TARGET_PKG /data/data/$TARGET_PKG -name 'DCStorage' 2>/dev/null")
+                val realPath = findRes.second.lines().firstOrNull { it.contains("DCStorage") && !it.contains("media") } ?: DB_PATH
+                appendLog("写入目标路径: $realPath")
                 su("rm -f '$tmp'")
-                su("cp '$DB_PATH' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
+                su("cp '$realPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
 
                 try {
                     val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READWRITE)
@@ -230,9 +236,9 @@ class MainActivity : AppCompatActivity() {
                     appendLog("更新行数: $rows")
 
                     if (rows > 0) {
-                        val uid = suOut("stat -c '%u' '$DB_PATH'")
-                        val ok  = su("cp '$tmp' '$DB_PATH'")
-                        if (ok && uid.isNotEmpty()) su("chown $uid:$uid '$DB_PATH'")
+                        val uid = suOut("stat -c '%u' '$realPath'")
+                        val ok  = su("cp '$tmp' '$realPath'")
+                        if (ok && uid.isNotEmpty()) su("chown $uid:$uid '$realPath'")
                         appendLog(if (ok) "✅ 写入成功" else "❌ 写回失败")
                         ui { binding.tvDecrypted.text = newVal }
                     } else {
@@ -252,13 +258,23 @@ class MainActivity : AppCompatActivity() {
         val tables = mutableListOf<String>()
         while (cur.moveToNext()) tables.add(cur.getString(0))
         cur.close()
-        return tables.firstOrNull { name ->
+        appendLog("  所有表: $tables")
+
+        // 找有 key/value 列的表，并打印样本数据
+        val match = tables.firstOrNull { name ->
             try {
-                val c = db.rawQuery("SELECT key, value FROM $name LIMIT 1", null)
+                val c = db.rawQuery("SELECT key, value FROM $name LIMIT 3", null)
                 val ok = c.columnCount >= 2
+                if (ok) {
+                    while (c.moveToNext()) {
+                        appendLog("  [$name] key=${c.getString(0).take(60)}")
+                    }
+                }
                 c.close(); ok
             } catch (e: Exception) { false }
         }
+        appendLog("  选用表: $match")
+        return match
     }
 
     private fun appendLog(msg: String) {
