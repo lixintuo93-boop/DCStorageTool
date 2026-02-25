@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <!--
+        使用 CryptoJS 4.x 实现 与目标 App 完全兼容的 AES 加解密
+        Key/IV 使用 Latin1 编码（8字节），CryptoJS 非标准 key size
+    -->
+    <script src="https://cdn.jsdelivr.net/npm/crypto-js@4.1.1/crypto-js.min.js"></script>
+    <script>
+    /**
+     * 解密：hospitalId + '@zk' 作为 Latin1 key
+     *        hospitalId + '@kz' 作为 Latin1 iv
+     *        CBC 模式，ZeroPadding
+     * @param {string} hospitalId  例如 "10097"
+     * @param {string} cipherB64   Base64 密文
+     * @returns {string}           解密后的 UTF-8 字符串（如 "uuid-string"）
+     */
+    function decrypt(hospitalId, cipherB64) {
+        try {
+            var key = CryptoJS.enc.Latin1.parse(hospitalId + '@zk');
+            var iv  = CryptoJS.enc.Latin1.parse(hospitalId + '@kz');
+            var dec = CryptoJS.AES.decrypt(cipherB64, key, {
+                iv: iv,
+                padding: CryptoJS.pad.ZeroPadding
+            });
+            return dec.toString(CryptoJS.enc.Utf8);
+        } catch (e) {
+            return 'ERROR:' + e.message;
+        }
+    }
+
+    /**
+     * 加密：与 decrypt 完全对称
+     * @param {string} hospitalId  例如 "10097"
+     * @param {string} plaintext   明文（需已 JSON.stringify，例如 '"uuid-string"'）
+     * @returns {string}           Base64 密文
+     */
+    function encrypt(hospitalId, plaintext) {
+        try {
+            var key = CryptoJS.enc.Latin1.parse(hospitalId + '@zk');
+            var iv  = CryptoJS.enc.Latin1.parse(hospitalId + '@kz');
+            var enc = CryptoJS.AES.encrypt(
+                CryptoJS.enc.Utf8.parse(plaintext),
+                key,
+                { iv: iv, padding: CryptoJS.pad.ZeroPadding }
+            );
+            return enc.toString();
+        } catch (e) {
+            return 'ERROR:' + e.message;
+        }
+    }
+    </script>
+</head>
+<body>
+    <p style="color:green;font-family:monospace">CryptoJS Ready</p>
+</body>
+</html>
