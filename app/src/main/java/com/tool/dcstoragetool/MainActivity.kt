@@ -229,15 +229,6 @@ class MainActivity : AppCompatActivity() {
         return UuidFmt(dashes, upper)
     }
 
-    private fun formatAs(uuidIn: String, fmt: UuidFmt): String {
-        val core = uuidIn.replace("-", "")
-            .let { if (fmt.upper) it.uppercase() else it.lowercase() }
-        if (core.length != 32) return uuidIn
-        return if (fmt.dashes) {
-            "${core.substring(0,8)}-${core.substring(8,12)}-${core.substring(12,16)}-${core.substring(16,20)}-${core.substring(20,32)}"
-        } else core
-    }
-
     /** 取核心 hex：去掉 '-' 并转小写，用于忽略格式（带-/大小写）的相等比较。 */
     private fun coreHex(s: String): String = s.replace("-", "").lowercase()
 
@@ -423,13 +414,10 @@ class MainActivity : AppCompatActivity() {
                 suOut("sed -n 's|.*<string name=\"android_device_dcloud_id\">\\([^<]*\\)</string>.*|\\1|p' '$it' 2>/dev/null").trim()
             } ?: ""
 
-            // 5. 解密旧 DCStorage 值 → 检测格式
+            // 5. 解密旧 DCStorage 值（仅用于显示格式 + hex 比对，不再做格式适配）
             val dbOldPlain = oldEncrypted?.let { decryptSync(it) } ?: ""
-            val fmtDb  = if (dbOldPlain.isNotEmpty()) detectFmt(dbOldPlain) else UuidFmt(true,  false)
-            val fmtDc  = if (dcOld.isNotEmpty())      detectFmt(dcOld)      else UuidFmt(false, false)
-            val fmtUni = if (uniOld.isNotEmpty())     detectFmt(uniOld)     else UuidFmt(false, true)
             logD("🔎 旧值 db=${mask(dbOldPlain)} dc=${mask(dcOld)} uni=${mask(uniOld)}")
-            logD("📐 检测格式 db=$fmtDb dc=$fmtDc uni=$fmtUni")
+            logD("📐 旧格式 db=${if (dbOldPlain.isNotEmpty()) detectFmt(dbOldPlain).toString() else "-"} dc=${if (dcOld.isNotEmpty()) detectFmt(dcOld).toString() else "-"} uni=${if (uniOld.isNotEmpty()) detectFmt(uniOld).toString() else "-"}")
 
             // 以 DCStorage 为基准：仅当 .DC / Uni 旧值的核心 hex 与 DCStorage 相同时才修改
             val dbHex   = coreHex(dbOldPlain)
@@ -437,9 +425,10 @@ class MainActivity : AppCompatActivity() {
             val uniSame = dbHex.isNotEmpty() && uniOld.isNotEmpty() && coreHex(uniOld) == dbHex
             logD("🔗 与 DCStorage 比对 dc=${if (dcSame) "相同→修改" else "不同→保持"} uni=${if (uniSame) "相同→修改" else "不同→保持"}")
 
-            val newForDb  = formatAs(newVal, fmtDb)
-            val newForDc  = formatAs(newVal, fmtDc)
-            val newForUni = formatAs(newVal, fmtUni)
+            // 不再按各处旧格式适配，三处统一写入规范形式（8-4-4-4-12 带- 小写）
+            val newForDb  = newVal
+            val newForDc  = newVal
+            val newForUni = newVal
             logD("✏️ 即将写入 db=$newForDb")
             if (dcSame)  logD("✏️ 即将写入 dc=$newForDc")
             if (uniSame) logD("✏️ 即将写入 uni=$newForUni")
