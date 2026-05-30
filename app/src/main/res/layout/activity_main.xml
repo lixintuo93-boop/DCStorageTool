@@ -29,28 +29,90 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="当前 UUID"
+                    android:text="当前设备 ID（三处）"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
-                    android:layout_marginBottom="6dp"/>
+                    android:layout_marginBottom="8dp"/>
+
+                <!-- DCStorage -->
                 <TextView
-                    android:id="@+id/tv_decrypted"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="DCStorage（基准）"
+                    android:textSize="10sp"
+                    android:textColor="#607D8B"/>
+                <TextView
+                    android:id="@+id/tv_val_db"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="读取中..."
-                    android:textSize="14sp"
+                    android:textSize="11sp"
                     android:fontFamily="monospace"
                     android:textColor="#2E7D32"
                     android:textIsSelectable="true"
-                    android:padding="8dp"
+                    android:padding="6dp"
                     android:background="#F1F8E9"
                     android:singleLine="true"
                     android:maxLines="1"
                     android:ellipsize="middle"
                     app:autoSizeTextType="uniform"
                     app:autoSizeMinTextSize="8sp"
-                    app:autoSizeMaxTextSize="14sp"
+                    app:autoSizeMaxTextSize="11sp"
+                    app:autoSizeStepGranularity="1sp"/>
+
+                <!-- .DC 文件 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=".DC 文件"
+                    android:textSize="10sp"
+                    android:textColor="#607D8B"
+                    android:layout_marginTop="6dp"/>
+                <TextView
+                    android:id="@+id/tv_val_dc"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#1565C0"
+                    android:textIsSelectable="true"
+                    android:padding="6dp"
+                    android:background="#E3F2FD"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="middle"
+                    app:autoSizeTextType="uniform"
+                    app:autoSizeMinTextSize="8sp"
+                    app:autoSizeMaxTextSize="11sp"
+                    app:autoSizeStepGranularity="1sp"/>
+
+                <!-- Uni 偏好 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Uni 偏好 (android_device_dcloud_id)"
+                    android:textSize="10sp"
+                    android:textColor="#607D8B"
+                    android:layout_marginTop="6dp"/>
+                <TextView
+                    android:id="@+id/tv_val_uni"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#6A1B9A"
+                    android:textIsSelectable="true"
+                    android:padding="6dp"
+                    android:background="#F3E5F5"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="middle"
+                    app:autoSizeTextType="uniform"
+                    app:autoSizeMinTextSize="8sp"
+                    app:autoSizeMaxTextSize="11sp"
                     app:autoSizeStepGranularity="1sp"/>
             </LinearLayout>
         </androidx.cardview.widget.CardView>

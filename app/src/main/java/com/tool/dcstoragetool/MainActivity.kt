@@ -238,6 +238,9 @@ class MainActivity : AppCompatActivity() {
         } else core
     }
 
+    /** 取核心 hex：去掉 '-' 并转小写，用于忽略格式（带-/大小写）的相等比较。 */
+    private fun coreHex(s: String): String = s.replace("-", "").lowercase()
+
     // ─── 路径定位 ────────────────────────────────────────────────
 
     private fun findDbPath(): String {
@@ -276,7 +279,7 @@ class MainActivity : AppCompatActivity() {
 
             if (!cpOk || !tmpFile.exists()) {
                 logD("🔴 复制数据库到 cache 失败")
-                ui { binding.tvDecrypted.text = "—"; toast("复制数据库失败") }
+                ui { binding.tvValDb.text = "—"; toast("复制数据库失败") }
                 return@Thread
             }
 
@@ -286,7 +289,7 @@ class MainActivity : AppCompatActivity() {
                 if (tableName == null) {
                     db.close()
                     logD("🔴 数据库中找不到主表")
-                    ui { binding.tvDecrypted.text = "—"; toast("未找到数据表") }
+                    ui { binding.tvValDb.text = "—"; toast("未找到数据表") }
                     return@Thread
                 }
                 logD("📋 主表: $tableName")
@@ -295,7 +298,7 @@ class MainActivity : AppCompatActivity() {
                 if (!cur.moveToFirst()) {
                     cur.close(); db.close()
                     logD("🔴 主表中找不到 Key=$DEF_DB_KEY")
-                    ui { binding.tvDecrypted.text = "—"; toast("未找到 Key") }
+                    ui { binding.tvValDb.text = "—"; toast("未找到 Key") }
                     return@Thread
                 }
 
@@ -305,15 +308,17 @@ class MainActivity : AppCompatActivity() {
 
                 val plain = decryptSync(raw)
                 logD("🔓 解密得到: ${mask(plain)} | 格式=${detectFmt(plain)}")
-                ui { binding.tvDecrypted.text = plain }
+                ui { binding.tvValDb.text = if (plain.isNotEmpty()) plain else "(空)" }
 
                 val dcFile = findDcFile()
                 if (dcFile != null) {
                     val dcVal = suOut("cat '$dcFile' 2>/dev/null").trim()
                     logD("📁 .DC 文件: $dcFile")
                     logD("   值: ${mask(dcVal)} | 格式=${detectFmt(dcVal)}")
+                    ui { binding.tvValDc.text = if (dcVal.isNotEmpty()) dcVal else "(空)" }
                 } else {
                     logD("⚠️  .DC*.txt 文件未找到")
+                    ui { binding.tvValDc.text = "未找到" }
                 }
 
                 val uniXml = findUniPref()
@@ -324,16 +329,19 @@ class MainActivity : AppCompatActivity() {
                     logD("📁 Uni 偏好: $uniXml")
                     if (uniVal.isNotEmpty()) {
                         logD("   android_device_dcloud_id = ${mask(uniVal)} | 格式=${detectFmt(uniVal)}")
+                        ui { binding.tvValUni.text = uniVal }
                     } else {
                         logD("   ⚠️  该键未在 XML 中找到")
+                        ui { binding.tvValUni.text = "无该键" }
                     }
                 } else {
                     logD("⚠️  __UNI__*.xml 未找到")
+                    ui { binding.tvValUni.text = "未找到" }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "read error", e)
                 logD("🔴 读取异常: ${e.message}")
-                ui { binding.tvDecrypted.text = "—"; toast("读取错误: ${e.message}") }
+                ui { binding.tvValDb.text = "—"; toast("读取错误: ${e.message}") }
             }
         }.start()
     }
@@ -423,12 +431,18 @@ class MainActivity : AppCompatActivity() {
             logD("🔎 旧值 db=${mask(dbOldPlain)} dc=${mask(dcOld)} uni=${mask(uniOld)}")
             logD("📐 检测格式 db=$fmtDb dc=$fmtDc uni=$fmtUni")
 
+            // 以 DCStorage 为基准：仅当 .DC / Uni 旧值的核心 hex 与 DCStorage 相同时才修改
+            val dbHex   = coreHex(dbOldPlain)
+            val dcSame  = dbHex.isNotEmpty() && dcOld.isNotEmpty()  && coreHex(dcOld)  == dbHex
+            val uniSame = dbHex.isNotEmpty() && uniOld.isNotEmpty() && coreHex(uniOld) == dbHex
+            logD("🔗 与 DCStorage 比对 dc=${if (dcSame) "相同→修改" else "不同→保持"} uni=${if (uniSame) "相同→修改" else "不同→保持"}")
+
             val newForDb  = formatAs(newVal, fmtDb)
             val newForDc  = formatAs(newVal, fmtDc)
             val newForUni = formatAs(newVal, fmtUni)
             logD("✏️ 即将写入 db=$newForDb")
-            logD("✏️ 即将写入 dc=$newForDc")
-            logD("✏️ 即将写入 uni=$newForUni")
+            if (dcSame)  logD("✏️ 即将写入 dc=$newForDc")
+            if (uniSame) logD("✏️ 即将写入 uni=$newForUni")
 
             // 6. 加密 DCStorage 新值
             val newEncrypted = encryptSync(newForDb)
@@ -470,8 +484,8 @@ class MainActivity : AppCompatActivity() {
             val cleanOk = su("rm -f '${realDbPath}-journal' '${realDbPath}-shm' '${realDbPath}-wal'")
             logD("🧹 删除 WAL/SHM/journal: ${if (cleanOk) "✓" else "✗"}")
 
-            // 9. 写 .DC*.txt
-            val dcOk = if (dcFile != null) {
+            // 9. 写 .DC*.txt —— 仅当与 DCStorage 相同
+            val dcOk = if (dcFile != null && dcSame) {
                 val uid = suOut("stat -c '%u' '$dcFile'").trim()
                 val gid = suOut("stat -c '%g' '$dcFile'").trim()
                 val ok  = su("printf '%s' '$newForDc' > '$dcFile'")
@@ -484,13 +498,16 @@ class MainActivity : AppCompatActivity() {
                 val match = verify == newForDc
                 logD("💾 .DC 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
-            } else {
+            } else if (dcFile == null) {
                 logD("⚠️  .DC 文件未找到，跳过")
+                false
+            } else {
+                logD("⏭️  .DC 与 DCStorage 不同，按规则保持不变 (dc=${mask(dcOld)})")
                 false
             }
 
-            // 10. 写 __UNI__*.xml
-            val uniOk = if (uniXml != null && uniOld.isNotEmpty()) {
+            // 10. 写 __UNI__*.xml —— 仅当与 DCStorage 相同
+            val uniOk = if (uniXml != null && uniOld.isNotEmpty() && uniSame) {
                 val uid = suOut("stat -c '%u' '$uniXml'").trim()
                 val gid = suOut("stat -c '%g' '$uniXml'").trim()
                 val ok  = su(
@@ -508,25 +525,52 @@ class MainActivity : AppCompatActivity() {
                 val match = verify == newForUni
                 logD("💾 Uni 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
-            } else if (uniXml != null) {
+            } else if (uniXml == null) {
+                logD("⚠️  Uni XML 未找到，跳过")
+                false
+            } else if (uniOld.isEmpty()) {
                 logD("⚠️  Uni XML 没有 android_device_dcloud_id 键，跳过")
                 false
             } else {
-                logD("⚠️  Uni XML 未找到，跳过")
+                logD("⏭️  Uni 与 DCStorage 不同，按规则保持不变 (uni=${mask(uniOld)})")
                 false
             }
 
-            logD("───── 完成 db=${if (dbWriteOk) "✓" else "✗"} dc=${if (dcOk) "✓" else "✗"} uni=${if (uniOk) "✓" else "✗"} ─────")
+            logD("───── 完成 db=${if (dbWriteOk) "✓" else "✗"} dc=${if (dcOk) "✓" else if (dcSame) "✗" else "保持"} uni=${if (uniOk) "✓" else if (uniSame) "✗" else "保持"} ─────")
 
             ui {
-                binding.tvDecrypted.text = newForDb
+                // 刷新三处显示：改了的显示新值，没改的显示原值
+                binding.tvValDb.text = newForDb
+                binding.tvValDc.text = when {
+                    dcFile == null -> "未找到"
+                    dcOk           -> newForDc
+                    else           -> if (dcOld.isNotEmpty()) dcOld else "(空)"
+                }
+                binding.tvValUni.text = when {
+                    uniXml == null      -> "未找到"
+                    uniOld.isEmpty()    -> "无该键"
+                    uniOk               -> newForUni
+                    else                -> uniOld
+                }
+
                 val sb = StringBuilder("写入完成\n")
                 sb.append("DCStorage: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
                 sb.append("DCFile: ")
-                  .append(if (dcFile == null) "未找到" else if (dcOk) "✓" else "✗")
+                  .append(when {
+                      dcFile == null -> "未找到"
+                      dcOk           -> "✓"
+                      dcSame         -> "✗"
+                      else           -> "不同·保持"
+                  })
                   .append('\n')
                 sb.append("UniPref: ")
-                  .append(if (uniXml == null) "未找到" else if (uniOk) "✓" else if (uniOld.isEmpty()) "无 Key" else "✗")
+                  .append(when {
+                      uniXml == null   -> "未找到"
+                      uniOld.isEmpty() -> "无 Key"
+                      uniOk            -> "✓"
+                      uniSame          -> "✗"
+                      else             -> "不同·保持"
+                  })
                 toast(sb.toString())
             }
         }.start()
