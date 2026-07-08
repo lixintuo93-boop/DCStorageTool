@@ -732,48 +732,65 @@ class MainActivity : AppCompatActivity() {
 
     private fun readAccountInfo() {
         try {
+            logD("👤 正在读取账号信息...")
             val realDbPath = findDbPath()
             val tmp = tmpTokenDb.absolutePath
             val myUid = android.os.Process.myUid()
             su("rm -f '$tmp'")
-            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) return
+            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
+                logD("⚠️ 复制 DCStorage 失败（账号读取）"); return
+            }
             val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
-            val tableName = findTable(db) ?: run { db.close(); return }
+            val tableName = findTable(db)
+            if (tableName == null) { db.close(); logD("⚠️ 未找到主表（账号读取）"); return }
+            logD("📋 账号表: $tableName")
 
             val sb = StringBuilder()
             // 手机号
             val c1 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
             if (c1.moveToFirst()) {
-                val p = decryptByAesSync(c1.getString(0))
+                val cipher1 = c1.getString(0)
+                logD("🔐 cache.account 密文长度=${cipher1.length}")
+                val p = decryptByAesSync(cipher1)
+                logD("🔓 cache.account 明文: ${p.take(60)}")
                 val m = Regex("\"mobile\"\\s*:\\s*\"([^\"]*)\"").find(p)?.groupValues?.get(1) ?: ""
-                if (m.isNotEmpty()) { sb.append("📱 $m"); ui { binding.tvValPhone.text = m } }
-            }
+                if (m.isNotEmpty()) { sb.append("📱 $m"); ui { binding.tvValPhone.text = m }; logD("📱 手机号: $m") }
+            } else { logD("⚠️ 未找到 cache.account 键") }
             c1.close()
             // 主患者
             val c2 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
             if (c2.moveToFirst()) {
-                val p = decryptByAesSync(c2.getString(0))
+                val cipher2 = c2.getString(0)
+                logD("🔐 default.member 密文长度=${cipher2.length}")
+                val p = decryptByAesSync(cipher2)
+                logD("🔓 default.member 明文: ${p.take(80)}")
                 val n = Regex("\"name\"\\s*:\\s*\"([^\"]*)\"").find(p)?.groupValues?.get(1) ?: ""
-                if (n.isNotEmpty()) { sb.append(n) }
-            }
+                if (n.isNotEmpty()) { sb.append(n); logD("👤 主患者: $n") }
+            } else { logD("⚠️ 未找到 default.member 键") }
             c2.close()
             // 家庭成员
             val c3 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
             if (c3.moveToFirst()) {
-                val s = decryptByAesSync(c3.getString(0))
+                val cipher3 = c3.getString(0)
+                logD("🔐 app.session 密文长度=${cipher3.length}")
+                val s = decryptByAesSync(cipher3)
+                logD("🔓 app.session 明文: ${s.take(80)}")
                 for (m in Regex("\"name\"\\s*:\\s*\"([^\"]*)\"").findAll(s)) {
                     val name = m.groupValues[1]
-                    if (sb.isNotEmpty() && !sb.contains(name)) { sb.append("\n"); sb.append("👤 $name") }
-                    else if (sb.isEmpty()) sb.append("👤 $name")
+                    if (sb.isNotEmpty() && !sb.contains(name)) { sb.append("\n👤 $name"); logD("👤 家庭成员: $name") }
+                    else if (sb.isEmpty()) { sb.append("👤 $name"); logD("👤 $name") }
                 }
-            }
+            } else { logD("⚠️ 未找到 app.session 键") }
             c3.close(); db.close()
             val text = sb.toString()
             if (text.isNotEmpty()) {
                 ui { binding.tvValAccount.text = text }
-                logD("👤 账号信息: ${text.replace("\n", ", ")}")
+                logD("👤 账号信息完成: ${text.replace("\n", ", ")}")
+            } else {
+                logD("⚠️ 账号信息为空")
+                ui { binding.tvValAccount.text = "无数据" }
             }
-        } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e) }
+        } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e); logD("🔴 readAccountInfo 异常: ${e.message}") }
     }
 
     private fun extractTokenFromJson(json: String): String {
