@@ -594,14 +594,10 @@ class MainActivity : AppCompatActivity() {
     /** 写入完整 session JSON + 同步关联 key */
     private fun writeFullSession(json: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
         try {
-            // 辅助函数：插入或替换（timestamp 是 NOT NULL 必须填）
+            // 辅助函数：INSERT OR REPLACE（避免 ContentValues + timestamp 问题）
             fun put(key: String, value: String) {
-                val cv = ContentValues().apply {
-                    put("key", key)
-                    put("value", value)
-                    put("timestamp", System.currentTimeMillis().toString())
-                }
-                db.insertWithOnConflict(tableName, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+                val ts = System.currentTimeMillis().toString()
+                db.execSQL("INSERT OR REPLACE INTO $tableName (key, value, timestamp) VALUES (?, ?, ?)", arrayOf(key, value, ts))
             }
 
             val sessionCipher = encryptByAESSync(json)
