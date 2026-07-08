@@ -8,9 +8,6 @@ local.properties
 .idea/
 .gradle/
 node_modules/
-package-lock.json
-*.js  # Ignore any JS files that are not in assets
-!/app/src/main/assets/*.js
 
 # Key files (security)
 *.jks
