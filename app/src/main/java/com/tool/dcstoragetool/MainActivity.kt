@@ -307,23 +307,7 @@ class MainActivity : AppCompatActivity() {
                     ui { binding.tvValDc.text = "未找到" }
                 }
 
-                val uniXml = findUniPref()
-                if (uniXml != null) {
-                    val uniVal = suOut(
-                        "sed -n 's|.*<string name=\"android_device_dcloud_id\">\\([^<]*\\)</string>.*|\\1|p' '$uniXml' 2>/dev/null"
-                    ).trim()
-                    logD("📁 Uni 偏好: $uniXml")
-                    if (uniVal.isNotEmpty()) {
-                        logD("   android_device_dcloud_id = ${mask(uniVal)} | 格式=${detectFmt(uniVal)}")
-                        ui { binding.tvValUni.text = uniVal }
-                    } else {
-                        logD("   ⚠️  该键未在 XML 中找到")
-                        ui { binding.tvValUni.text = "无该键" }
-                    }
-                } else {
-                    logD("⚠️  __UNI__*.xml 未找到")
-                    ui { binding.tvValUni.text = "未找到" }
-                }
+                readToken()
             } catch (e: Exception) {
                 Log.e(TAG, "read error", e)
                 logD("🔴 读取异常: ${e.message}")
