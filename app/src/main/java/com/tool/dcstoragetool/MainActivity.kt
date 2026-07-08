@@ -17,7 +17,6 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.tool.dcstoragetool.databinding.ActivityMainBinding
 import java.io.File
-import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -552,73 +551,72 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    /** 判断输入是否为完整登录 JSON（包含 token + id 字段） */
+    /** 判断输入是否为完整登录 JSON（包含 token + id + mobile 字段） */
     private fun isFullSessionJson(s: String): Boolean {
-        return try {
-            val j = JSONObject(s.trim())
-            j.has("token") && j.has("id")
-        } catch (e: Exception) { false }
+        val t = s.trim()
+        return t.startsWith("{") && t.contains("\"token\"") && t.contains("\"id\"") && t.contains("\"mobile\"")
     }
 
-    /** 写入完整 session JSON + 同步关联 key。如果已单独写入 UUID 则跳过 deviceId */
-    private fun writeFullSession(sessionJson: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
-        try {
-            val sessionObj = JSONObject(sessionJson)
-            val newToken = sessionObj.optString("token", "")
-            val newDeviceId = sessionObj.optString("deviceId", "")
-            val newMobile = sessionObj.optString("mobile", "")
-            val newAccountId = sessionObj.optString("id", "")
-            val defaultPatient = sessionObj.optJSONObject("defaultPatient")
+    /** 从 JSON 串中提取指定 key 的字符串值 */
+    private fun extractJsonString(json: String, key: String): String {
+        val m = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(json)
+        return m?.groupValues?.get(1)?.replace("\\\"", "\"")?.replace("\\\\", "\\") ?: ""
+    }
 
-            // 1. 写入 app.session
-            val sessionCipher = encryptByAESSync(sessionJson)
-            if (sessionCipher.isEmpty() || sessionCipher.startsWith("ERROR")) {
-                logD("🔴 加密 session 失败"); return false
-            }
+    /** 从 JSON 中提取嵌套对象 {...} */
+    private fun extractJsonObject(json: String, key: String): String? {
+        val idx = json.indexOf("\"$key\"")
+        if (idx < 0) return null
+        var pos = json.indexOf('{', idx)
+        if (pos < 0) return null
+        var depth = 0; val sb = StringBuilder()
+        while (pos < json.length) {
+            val c = json[pos]; sb.append(c)
+            if (c == '{') depth++
+            else if (c == '}') { depth--; if (depth == 0) return sb.toString() }
+            else if (c == '"') { sb.append(c); pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
+            pos++
+        }
+        return null
+    }
+
+    /** 写入完整 session JSON + 同步关联 key */
+    private fun writeFullSession(json: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
+        try {
+            val sessionCipher = encryptByAESSync(json)
+            if (sessionCipher.isEmpty() || sessionCipher.startsWith("ERROR")) { logD("🔴 加密 session 失败"); return false }
             var cv = ContentValues().apply { put("value", sessionCipher) }
             db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
             logD("💾 app.session 已写入")
 
-            // 2. 同步 deviceId 到 DCStorage（如果用户未单独指定 UUID）
-            if (!skipDeviceId && newDeviceId.isNotEmpty()) {
-                val deviceCipher = encryptSync(newDeviceId)
-                if (deviceCipher.isNotEmpty() && !deviceCipher.startsWith("ERROR")) {
-                    cv = ContentValues().apply { put("value", deviceCipher) }
-                    db.update(tableName, cv, "key=?", arrayOf(DEF_DB_KEY))
-                    logD("💾 deviceId 已同步: $newDeviceId")
+            if (!skipDeviceId) {
+                val devId = extractJsonString(json, "deviceId")
+                if (devId.isNotEmpty()) {
+                    val c = encryptSync(devId)
+                    if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf(DEF_DB_KEY)); logD("💾 deviceId 已同步: $devId") }
                 }
             }
 
-            // 3. 同步 cache.account (mobile)
-            if (newMobile.isNotEmpty()) {
-                val accountJson = "{\"mobile\":\"$newMobile\"}"
-                val accountCipher = encryptByAESSync(accountJson)
-                if (accountCipher.isNotEmpty() && !accountCipher.startsWith("ERROR")) {
-                    cv = ContentValues().apply { put("value", accountCipher) }
-                    db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
-                    logD("💾 cache.account 已同步")
-                }
+            val mobile = extractJsonString(json, "mobile")
+            if (mobile.isNotEmpty()) {
+                val c = encryptByAESSync("{\"mobile\":\"$mobile\"}")
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account")); logD("💾 cache.account 已同步") }
             }
 
-            // 4. 同步 default.member (defaultPatient)
-            if (defaultPatient != null) {
-                val memberJson = defaultPatient.toString()
-                val memberCipher = encryptByAESSync(memberJson)
-                if (memberCipher.isNotEmpty() && !memberCipher.startsWith("ERROR")) {
-                    cv = ContentValues().apply { put("value", memberCipher) }
-                    db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
-                    logD("💾 default.member 已同步")
-                }
+            val patient = extractJsonObject(json, "defaultPatient")
+            if (patient != null) {
+                val c = encryptByAESSync(patient)
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member")); logD("💾 default.member 已同步") }
+                val pid = extractJsonString(patient, "id")
+                if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { cv = ContentValues().apply { put("value", pc) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.peopleId")); logD("💾 default.peopleId 已同步: $pid") } }
+            }
 
-                // 5. 同步 default.peopleId
-                val peopleId = defaultPatient.optString("id", "")
-                if (peopleId.isNotEmpty()) {
-                    val peopleCipher = encryptByAESSync(peopleId)
-                    if (peopleCipher.isNotEmpty() && !peopleCipher.startsWith("ERROR")) {
-                        cv = ContentValues().apply { put("value", peopleCipher) }
-                        db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.peopleId"))
-                        logD("💾 default.peopleId 已同步: $peopleId")
-                    }
+            // 同步 .DC 文件和 XML
+            if (!skipDeviceId) {
+                val devId = extractJsonString(json, "deviceId")
+                if (devId.isNotEmpty()) {
+                    val dcFile = findDcFile(); if (dcFile != null) { su("printf '%s' '$devId' > '$dcFile'"); logD("💾 .DC 文件已同步") }
+                    val uniXml = findUniPref(); if (uniXml != null) { su("sed -i 's|<string name=\"android_device_dcloud_id\">[^<]*</string>|<string name=\"android_device_dcloud_id\">$devId</string>|' '$uniXml'"); logD("💾 Uni XML 已同步") }
                 }
             }
 
