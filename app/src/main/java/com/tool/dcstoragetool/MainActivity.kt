@@ -167,8 +167,13 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {
                 if (suppressWatcher) return
                 val raw = s?.toString() ?: ""
+                // 完整登录 JSON：不自动提取 UUID，显示迁移提示
+                if (isFullSessionJson(raw)) {
+                    binding.tvInputStatus.text = "✓ 检测到完整登录 JSON，将执行账号迁移"
+                    binding.tvInputStatus.setTextColor(0xFF2E7D32.toInt())
+                    return
+                }
                 val isPaste = raw.length - oldLen >= 16
-
                 if (isPaste) {
                     val r = normalizeUuid(raw)
                     if (r is NormResult.Valid && r.canonical != raw) {
