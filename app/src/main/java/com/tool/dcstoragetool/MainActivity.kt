@@ -594,18 +594,17 @@ class MainActivity : AppCompatActivity() {
     /** 写入完整 session JSON + 同步关联 key */
     private fun writeFullSession(json: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
         try {
-            fun put(key: String, value: String) {
-                val cv = ContentValues().apply {
-                    put("key", key)
-                    put("value", value)
-                    put("timestamp", System.currentTimeMillis().toString())
-                }
+            fun insertOrReplace(k: String, v: String) {
+                val cv = ContentValues()
+                cv.put("key", k)
+                cv.put("value", v)
+                cv.put("timestamp", System.currentTimeMillis().toString())
                 db.replace(tableName, null, cv)
             }
 
             val sessionCipher = encryptByAESSync(json)
             if (sessionCipher.isEmpty() || sessionCipher.startsWith("ERROR")) { logD("🔴 加密 session 失败"); return false }
-            put("$DEF_HOSPITAL_ID.product.app.session", sessionCipher)
+            insertOrReplace("$DEF_HOSPITAL_ID.product.app.session", sessionCipher)
             logD("💾 app.session 已写入")
 
             if (!skipDeviceId) {
