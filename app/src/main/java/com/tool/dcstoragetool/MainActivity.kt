@@ -676,6 +676,14 @@ class MainActivity : AppCompatActivity() {
                 if (c.isNotEmpty() && !c.startsWith("ERROR")) { insertOrReplace("$DEF_HOSPITAL_ID.product.default.member", c); logD("💾 default.member 已同步") }
                 val pid = extractJsonString(patient, "id")
                 if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { insertOrReplace("$DEF_HOSPITAL_ID.product.default.peopleId", pc); logD("💾 default.peopleId 已同步: $pid") } }
+            } else {
+                // 无患者信息时清空旧数据
+                val emptyCipher = encryptByAESSync("{}")
+                if (emptyCipher.isNotEmpty() && !emptyCipher.startsWith("ERROR")) {
+                    insertOrReplace("$DEF_HOSPITAL_ID.product.default.member", emptyCipher)
+                    insertOrReplace("$DEF_HOSPITAL_ID.product.default.peopleId", emptyCipher)
+                    logD("💾 default.member/default.peopleId 已清空")
+                }
             }
 
             // 同步 .DC 文件和 XML
