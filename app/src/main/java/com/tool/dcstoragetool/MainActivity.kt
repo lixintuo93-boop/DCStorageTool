@@ -357,12 +357,18 @@ class MainActivity : AppCompatActivity() {
         val newToken = parsed.token
 
         Thread {
-            logD("───── 写入 ${newUuid} ─────")
+            if (newUuid != null) logD("───── 写入 UUID: $newUuid ─────")
+            if (newToken != null) logD("───── 写入 Token: ${maskToken(newToken)} ─────")
 
             // 1. force-stop 目标 App
             val fs = suFull("am force-stop $TARGET_PKG")
             logD("🛑 force-stop 退出码=${fs.first}${if (fs.third.isNotEmpty()) " err=${fs.third}" else ""}")
 
+            var dbWriteOk = false
+            var dcOk = false
+            var uniOk = false
+
+            if (newUuid != null) {
             // 2. 定位三处存储
             val realDbPath = findDbPath()
             val dcFile     = findDcFile()
@@ -378,7 +384,8 @@ class MainActivity : AppCompatActivity() {
             val cpOk = su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
             if (!cpOk || !File(tmp).exists()) {
                 logD("🔴 复制 DCStorage 失败")
-                ui { toast("复制数据库失败") }; return@Thread
+                ui { toast("复制数据库失败") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
 
             var oldEncrypted: String? = null
@@ -397,8 +404,9 @@ class MainActivity : AppCompatActivity() {
                 logD("🔴 读旧 DCStorage 出错: ${e.message}")
             }
             if (tableName == null) {
-                logD("🔴 找不到主表，终止")
-                ui { toast("未找到数据表") }; return@Thread
+                logD("🔴 找不到主表，终止 UUID 写入")
+                ui { toast("未找到数据表") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
 
             // 4. 读 .DC*.txt 和 __UNI__*.xml 旧值
@@ -407,7 +415,7 @@ class MainActivity : AppCompatActivity() {
                 suOut("sed -n 's|.*<string name=\"android_device_dcloud_id\">\\([^<]*\\)</string>.*|\\1|p' '$it' 2>/dev/null").trim()
             } ?: ""
 
-            // 5. 解密旧 DCStorage 值（仅用于显示格式 + hex 比对，不再做格式适配）
+            // 5. 解密旧 DCStorage 值（仅用于显示格式 + hex 比对）
             val dbOldPlain = oldEncrypted?.let { decryptSync(it) } ?: ""
             logD("🔎 旧值 db=${mask(dbOldPlain)} dc=${mask(dcOld)} uni=${mask(uniOld)}")
             logD("📐 旧格式 db=${if (dbOldPlain.isNotEmpty()) detectFmt(dbOldPlain).toString() else "-"} dc=${if (dcOld.isNotEmpty()) detectFmt(dcOld).toString() else "-"} uni=${if (uniOld.isNotEmpty()) detectFmt(uniOld).toString() else "-"}")
@@ -418,19 +426,12 @@ class MainActivity : AppCompatActivity() {
             val uniSame = dbHex.isNotEmpty() && uniOld.isNotEmpty() && coreHex(uniOld) == dbHex
             logD("🔗 与 DCStorage 比对 dc=${if (dcSame) "相同→修改" else "不同→保持"} uni=${if (uniSame) "相同→修改" else "不同→保持"}")
 
-            // 不再按各处旧格式适配，三处统一写入规范形式（8-4-4-4-12 带- 小写）
-            val newForDb  = newUuid
-            val newForDc  = newUuid
-            val newForUni = newUuid
-            logD("✏️ 即将写入 db=$newForDb")
-            if (dcSame)  logD("✏️ 即将写入 dc=$newForDc")
-            if (uniSame) logD("✏️ 即将写入 uni=$newForUni")
-
             // 6. 加密 DCStorage 新值
-            val newEncrypted = encryptSync(newForDb)
+            val newEncrypted = encryptSync(newUuid)
             if (newEncrypted.isEmpty() || newEncrypted.startsWith("ERROR")) {
                 logD("🔴 加密失败: $newEncrypted")
-                ui { toast("加密失败") }; return@Thread
+                ui { toast("加密失败") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
             logD("🔐 加密成功，密文长度=${newEncrypted.length}")
 
@@ -442,17 +443,19 @@ class MainActivity : AppCompatActivity() {
                 db.close()
                 logD("💾 DCStorage rows updated = $rows")
                 if (rows <= 0) {
-                    ui { toast("DCStorage 中未找到 Key") }; return@Thread
+                    ui { toast("DCStorage 中未找到 Key") }
+                    writeTokenToSp(newToken); doRead(); return@Thread
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "write db error", e)
                 logD("🔴 写 DCStorage 出错: ${e.message}")
-                ui { toast("写入 DCStorage 失败: ${e.message}") }; return@Thread
+                ui { toast("写入 DCStorage 失败: ${e.message}") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
 
             val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
             val dbGid = suOut("stat -c '%g' '$realDbPath'").trim()
-            val dbWriteOk = su("cp '$tmp' '$realDbPath'")
+            dbWriteOk = su("cp '$tmp' '$realDbPath'")
             if (dbWriteOk && dbUid.isNotEmpty()) {
                 val g = if (dbGid.isNotEmpty()) dbGid else dbUid
                 su("chown $dbUid:$g '$realDbPath'")
@@ -463,21 +466,21 @@ class MainActivity : AppCompatActivity() {
             }
 
             // 8. 删 DCStorage WAL/SHM/journal
-            val cleanOk = su("rm -f '${realDbPath}-journal' '${realDbPath}-shm' '${realDbPath}-wal'")
-            logD("🧹 删除 WAL/SHM/journal: ${if (cleanOk) "✓" else "✗"}")
+            su("rm -f '${realDbPath}-journal' '${realDbPath}-shm' '${realDbPath}-wal'")
+            logD("🧹 删除 WAL/SHM/journal")
 
             // 9. 写 .DC*.txt —— 仅当与 DCStorage 相同
-            val dcOk = if (dcFile != null && dcSame) {
+            dcOk = if (dcFile != null && dcSame) {
                 val uid = suOut("stat -c '%u' '$dcFile'").trim()
                 val gid = suOut("stat -c '%g' '$dcFile'").trim()
-                val ok  = su("printf '%s' '$newForDc' > '$dcFile'")
+                val ok  = su("printf '%s' '$newUuid' > '$dcFile'")
                 if (ok && uid.isNotEmpty()) {
                     val g = if (gid.isNotEmpty()) gid else uid
                     su("chown $uid:$g '$dcFile'")
                     su("chmod 600 '$dcFile'")
                 }
                 val verify = suOut("cat '$dcFile' 2>/dev/null").trim()
-                val match = verify == newForDc
+                val match = verify == newUuid
                 logD("💾 .DC 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
             } else if (dcFile == null) {
@@ -489,12 +492,12 @@ class MainActivity : AppCompatActivity() {
             }
 
             // 10. 写 __UNI__*.xml —— 仅当与 DCStorage 相同
-            val uniOk = if (uniXml != null && uniOld.isNotEmpty() && uniSame) {
+            uniOk = if (uniXml != null && uniOld.isNotEmpty() && uniSame) {
                 val uid = suOut("stat -c '%u' '$uniXml'").trim()
                 val gid = suOut("stat -c '%g' '$uniXml'").trim()
                 val ok  = su(
                     "sed -i 's|<string name=\"android_device_dcloud_id\">[^<]*</string>" +
-                    "|<string name=\"android_device_dcloud_id\">$newForUni</string>|' '$uniXml'"
+                    "|<string name=\"android_device_dcloud_id\">$newUuid</string>|' '$uniXml'"
                 )
                 if (ok && uid.isNotEmpty()) {
                     val g = if (gid.isNotEmpty()) gid else uid
@@ -504,7 +507,7 @@ class MainActivity : AppCompatActivity() {
                 val verify = suOut(
                     "sed -n 's|.*<string name=\"android_device_dcloud_id\">\\([^<]*\\)</string>.*|\\1|p' '$uniXml' 2>/dev/null"
                 ).trim()
-                val match = verify == newForUni
+                val match = verify == newUuid
                 logD("💾 Uni 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
             } else if (uniXml == null) {
