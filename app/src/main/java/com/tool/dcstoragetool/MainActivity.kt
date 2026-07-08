@@ -175,8 +175,8 @@ class MainActivity : AppCompatActivity() {
             override fun afterTextChanged(s: Editable?) {
                 if (suppressWatcher) return
                 val raw = s?.toString() ?: ""
-                // 完整登录 JSON：不自动提取 UUID，显示迁移提示
-                if (isFullSessionJson(raw)) {
+                // 完整登录 JSON（含 value 包装也支持）
+                if (isFullSessionJson(raw) || isFullSessionJson(tryExtractValue(raw))) {
                     binding.tvInputStatus.text = "✓ 检测到完整登录 JSON，将执行账号迁移"
                     binding.tvInputStatus.setTextColor(0xFF2E7D32.toInt())
                     return
@@ -333,36 +333,48 @@ class MainActivity : AppCompatActivity() {
 
     // ─── 写入 ────────────────────────────────────────────────────
 
+    /** 从完整登录响应中提取 value 对象 */
+    private fun tryExtractValue(raw: String): String {
+        val t = raw.trim()
+        // 如果包含 \"value\":{ 则提取 value 对象
+        val m = Regex("\"value\"\\s*:\\s*").find(t)
+        if (m != null) {
+            val start = m.range.last + 1
+            if (start < t.length && t[start] == '{') {
+                val inner = extractJsonObject(t.substring(start), "")
+                if (inner != null) return inner
+                // fallback: 尝试从完整字符串中提取
+                return extractJsonObject(t, "value") ?: t
+            }
+        }
+        return t
+    }
+
     private fun doWrite() {
         val raw = binding.etNewUuid.text.toString().trim()
 
+        // 先提取 value（处理完整登录响应）
+        val content = tryExtractValue(raw)
+
+        // 判断：完整登录 JSON → session 迁移，否则尝试 UUID
         var newUuid: String? = null
         var newToken: String? = null
 
-        // 先判断整体是否为完整登录 JSON（避免把 JSON 内的 deviceId 误提取为 UUID）
-        if (isFullSessionJson(raw)) {
-            newToken = raw
+        if (isFullSessionJson(content)) {
+            newToken = content
         } else {
-            // 解析多行输入：每行分别看是 UUID 还是 token
-            val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
-            for (line in lines) {
-                val norm = normalizeUuid(line)
-                if (norm is NormResult.Valid) {
-                    if (newUuid == null) newUuid = norm.canonical
-                } else if (norm is NormResult.Invalid || line.length > 10) {
-                    if (newToken == null) newToken = line
-                }
+            val norm = normalizeUuid(content)
+            if (norm is NormResult.Valid) {
+                newUuid = norm.canonical
+            } else {
+                toast("请输入合法 UUID 或完整登录 JSON")
+                return
             }
-        }
-
-        if (newUuid == null && newToken == null) {
-            toast("请粘贴 UUID 和/或 Token（换行分隔）")
-            return
         }
 
         Thread {
             if (newUuid != null) logD("───── 写入 UUID: $newUuid ─────")
-            if (newToken != null) logD("───── 写入 Token: ${newToken?.let { if (it.length <= 60) it else it.take(25) + "…" + it.takeLast(25)} } ─────")
+            if (newToken != null) logD("───── 写入 Session: ${newToken?.let { if (it.length <= 60) it else it.take(25) + "…" + it.takeLast(25)} } ─────")
 
             // 1. force-stop 目标 App
             val fs = suFull("am force-stop $TARGET_PKG")
@@ -544,9 +556,6 @@ class MainActivity : AppCompatActivity() {
                             if (isFullSessionJson(newToken)) {
                                 logD("📦 检测到完整登录 JSON，执行账号迁移...")
                                 tokenOk = writeFullSession(newToken, db, tableName, newUuid != null)
-                            } else {
-                                logD("🔑 仅替换 token 字段...")
-                                tokenOk = writeTokenOnly(newToken, db, tableName)
                             }
                         } else { logD("🔴 未找到主表") }
                         db.close()
@@ -563,7 +572,7 @@ class MainActivity : AppCompatActivity() {
 
             val sb = StringBuilder("写入完成\n")
             if (newUuid != null) sb.append("UUID: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
-            if (newToken != null) sb.append(if (isFullSessionJson(newToken)) "账号迁移" else "Token").append(": ").append(if (tokenOk) "✓" else "✗")
+            if (newToken != null) sb.append("账号迁移: ").append(if (tokenOk) "✓" else "✗")
             ui { toast(sb.toString().trim()) }
 
             logD("🔄 写入完成，重新从磁盘读取...")
@@ -675,34 +684,6 @@ class MainActivity : AppCompatActivity() {
             }
             return ok
         } catch (e: Exception) { Log.e(TAG, "writeTokenToSp error", e); return false }
-    }
-
-    /** 仅替换 token 字段（旧行为，用于只粘贴 token 的场景） */
-    private fun writeTokenOnly(newToken: String, db: SQLiteDatabase, tableName: String): Boolean {
-        try {
-            val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
-            val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
-            if (!cur.moveToFirst()) { cur.close(); logD("🔴 未找到 app.session 键"); return false }
-            val oldCipher = cur.getString(0); cur.close()
-            val oldJson = decryptByAesSync(oldCipher)
-            if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { logD("🔴 解密旧 token 失败"); return false }
-            val newJson = replaceTokenInJson(oldJson, newToken)
-            val newCipher = encryptByAESSync(newJson)
-            if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { logD("🔴 加密新 token 失败"); return false }
-            val cv = ContentValues().apply { put("value", newCipher) }
-            db.update(tableName, cv, "key=?", arrayOf(tokenKey))
-            logD("💾 Token 已替换")
-            return true
-        } catch (e: Exception) { Log.e(TAG, "writeTokenOnly error", e); return false }
-    }
-
-    private fun replaceTokenInJson(json: String, newToken: String): String {
-        var j = json.trim()
-        while (j.startsWith("\"") && j.endsWith("\"")) j = j.substring(1, j.length - 1).trim()
-        val regex = Regex("\"token\"\\s*:\\s*\"[^\"]*\"")
-        if (regex.containsMatchIn(j)) return regex.replaceFirst(j, "\"token\":\"$newToken\"")
-        if (j.endsWith("}")) return j.substring(0, j.length - 1) + ",\"token\":\"$newToken\"}"
-        return j
     }
 
     private fun readToken() {

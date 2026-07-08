@@ -182,7 +182,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="新 UUID / Token / 登录JSON（换行分隔，自动识别）"
+                    android:text="新 UUID 或完整登录 JSON"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
