@@ -594,32 +594,37 @@ class MainActivity : AppCompatActivity() {
     /** 写入完整 session JSON + 同步关联 key */
     private fun writeFullSession(json: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
         try {
+            // 辅助函数：插入或替换
+            fun put(key: String, value: String) {
+                val cv = ContentValues().apply { put("key", key); put("value", value) }
+                db.insertWithOnConflict(tableName, null, cv, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+
             val sessionCipher = encryptByAESSync(json)
             if (sessionCipher.isEmpty() || sessionCipher.startsWith("ERROR")) { logD("🔴 加密 session 失败"); return false }
-            var cv = ContentValues().apply { put("value", sessionCipher) }
-            db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
+            put("$DEF_HOSPITAL_ID.product.app.session", sessionCipher)
             logD("💾 app.session 已写入")
 
             if (!skipDeviceId) {
                 val devId = extractJsonString(json, "deviceId")
                 if (devId.isNotEmpty()) {
                     val c = encryptSync(devId)
-                    if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf(DEF_DB_KEY)); logD("💾 deviceId 已同步: $devId") }
+                    if (c.isNotEmpty() && !c.startsWith("ERROR")) { put(DEF_DB_KEY, c); logD("💾 deviceId 已同步: $devId") }
                 }
             }
 
             val mobile = extractJsonString(json, "mobile")
             if (mobile.isNotEmpty()) {
                 val c = encryptByAESSync("{\"mobile\":\"$mobile\"}")
-                if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account")); logD("💾 cache.account 已同步") }
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.cache.account", c); logD("💾 cache.account 已同步") }
             }
 
             val patient = extractJsonObject(json, "defaultPatient")
             if (patient != null) {
                 val c = encryptByAESSync(patient)
-                if (c.isNotEmpty() && !c.startsWith("ERROR")) { cv = ContentValues().apply { put("value", c) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member")); logD("💾 default.member 已同步") }
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.default.member", c); logD("💾 default.member 已同步") }
                 val pid = extractJsonString(patient, "id")
-                if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { cv = ContentValues().apply { put("value", pc) }; db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.peopleId")); logD("💾 default.peopleId 已同步: $pid") } }
+                if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.default.peopleId", pc); logD("💾 default.peopleId 已同步: $pid") } }
             }
 
             // 同步 .DC 文件和 XML
