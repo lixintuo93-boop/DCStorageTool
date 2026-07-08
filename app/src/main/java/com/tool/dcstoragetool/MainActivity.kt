@@ -520,32 +520,45 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
+    /** 从 DCStorage 数据库中读取/写入 token（key = {hospitalId}.product.app.session） */
     private fun writeTokenToSp(newToken: String?): Boolean {
         if (newToken == null) return false
         try {
-            val spFile = findTokenSpFile() ?: run { logD("🔴 未找到 token SP 文件"); return false }
-            logD("🔑 Token SP: $spFile")
-            var actualKey: String? = null; var oldCipher: String? = null
-            for (mode in listOf("production", "debug")) {
-                val key = "$DEF_HOSPITAL_ID.$mode.app.session"
-                val v = extractSpValue(spFile, key)
-                if (v != null) { actualKey = key; oldCipher = v; break }
+            val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
+            val realDbPath = findDbPath()
+            val tmp = tmpDb.absolutePath
+            val myUid = android.os.Process.myUid()
+            su("rm -f '$tmp'")
+            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
+                logD("🔴 复制 DCStorage 失败（token 写入）"); return false
             }
-            if (actualKey == null || oldCipher == null) { logD("🔴 未找到 app.session 键"); return false }
-            val oldJson = decryptByAesSync(oldCipher)
-            if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { logD("🔴 解密旧 token 失败"); return false }
-            val newJson = replaceTokenInJson(oldJson, newToken)
-            val newCipher = encryptByAESSync(newJson)
-            if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { logD("🔴 加密新 token 失败"); return false }
-            val eOld = oldCipher.replace("/", "\\/").replace("&", "\\&")
-            val eNew = newCipher.replace("/", "\\/").replace("&", "\\&")
-            val uid = suOut("stat -c '%u' '$spFile'").trim()
-            val gid = suOut("stat -c '%g' '$spFile'").trim()
-            val ok = su("sed -i 's|<string name=\"$actualKey\">$eOld</string>|<string name=\"$actualKey\">$eNew</string>|' '$spFile'")
-            if (ok && uid.isNotEmpty()) { val g = if (gid.isNotEmpty()) gid else uid; su("chown $uid:$g '$spFile'"); su("chmod 660 '$spFile'") }
-            val match = extractSpValue(spFile, actualKey) == newCipher
-            logD("💾 Token 写入 ${if (ok && match) "✓" else "✗"}")
-            return ok && match
+            var tableName: String? = null; var oldCipher: String? = null
+            try {
+                val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READWRITE)
+                tableName = findTable(db)
+                if (tableName != null) {
+                    val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
+                    if (cur.moveToFirst()) oldCipher = cur.getString(0)
+                    cur.close()
+                }
+                if (tableName == null || oldCipher == null) { db.close(); logD("🔴 未找到 token 键: $tokenKey"); return false }
+                val oldJson = decryptByAesSync(oldCipher)
+                if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { db.close(); logD("🔴 解密旧 token 失败"); return false }
+                val newJson = replaceTokenInJson(oldJson, newToken)
+                val newCipher = encryptByAESSync(newJson)
+                if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { db.close(); logD("🔴 加密新 token 失败"); return false }
+                val cv = ContentValues().apply { put("value", newCipher) }
+                val rows = db.update(tableName, cv, "key=?", arrayOf(tokenKey))
+                db.close()
+                logD("💾 Token rows updated = $rows")
+                if (rows <= 0) return false
+            } catch (e: Exception) { Log.e(TAG, "write token db error", e); return false }
+            val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
+            val dbGid = suOut("stat -c '%g' '$realDbPath'").trim()
+            val ok = su("cp '$tmp' '$realDbPath'")
+            if (ok && dbUid.isNotEmpty()) { val g = if (dbGid.isNotEmpty()) dbGid else dbUid; su("chown $dbUid:$g '$realDbPath'"); su("chmod 660 '$realDbPath'") }
+            logD("💾 Token 写入 ${if (ok) "✓" else "✗"}")
+            return ok
         } catch (e: Exception) { Log.e(TAG, "write token error", e); return false }
     }
 
@@ -558,36 +571,25 @@ class MainActivity : AppCompatActivity() {
         return j
     }
 
-    private fun findTokenSpFile(): String? {
-        val out = suFull("grep -rl 'app\\.session' $DATA_DIR/shared_prefs/ 2>/dev/null").second
-        out.lines().firstOrNull { it.isNotBlank() }?.let { return it }
-        for (name in listOf("PandoraEntry.xml", "dcloud_storage.xml", "pdr.xml")) {
-            val path = "$DATA_DIR/shared_prefs/$name"
-            if (su("test -f '$path'") && suOut("grep -c 'app.session' '$path' 2>/dev/null").trim() != "0") return path
-        }
-        for (line in suOut("ls $DATA_DIR/shared_prefs/*.xml 2>/dev/null").lines().map { it.trim() }.filter { it.isNotBlank() }) {
-            if (suOut("grep -c 'app.session' '$line' 2>/dev/null").trim() != "0") return line
-        }
-        return null
-    }
-
-    private fun extractSpValue(spPath: String, key: String): String? {
-        val out = suOut("sed -n 's|.*<string name=\"$key\">\\([^<]*\\)</string>.*|\\1|p' '$spPath' 2>/dev/null").trim()
-        return if (out.isNotEmpty()) out else null
-    }
-
     private fun readToken() {
         try {
-            val spFile = findTokenSpFile() ?: run { logD("⚠️ 未找到 token 存储"); ui { binding.tvValUni.text = "未找到" }; return }
-            logD("🔑 Token SP: $spFile")
-            var cv: String? = null
-            for (mode in listOf("production", "debug")) {
-                cv = extractSpValue(spFile, "$DEF_HOSPITAL_ID.$mode.app.session")
-                if (cv != null) break
+            val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
+            val realDbPath = findDbPath()
+            val tmp = tmpDb.absolutePath
+            val myUid = android.os.Process.myUid()
+            su("rm -f '$tmp'")
+            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
+                logD("⚠️ 复制 DCStorage 失败（token 读取）"); ui { binding.tvValUni.text = "读取失败" }; return
             }
-            if (cv == null) { logD("⚠️ 无 app.session"); ui { binding.tvValUni.text = "无数据" }; return }
-            val plain = decryptByAesSync(cv)
-            if (plain.isEmpty() || plain.startsWith("ERROR")) { ui { binding.tvValUni.text = "解密失败" }; return }
+            val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
+            val tableName = findTable(db)
+            if (tableName == null) { db.close(); logD("⚠️ 未找到主表"); ui { binding.tvValUni.text = "未找到" }; return }
+            val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
+            if (!cur.moveToFirst()) { cur.close(); db.close(); logD("⚠️ 无 app.session 键"); ui { binding.tvValUni.text = "无数据" }; return }
+            val cipher = cur.getString(0); cur.close(); db.close()
+            logD("🔐 Token 密文长度=${cipher.length}")
+            val plain = decryptByAesSync(cipher)
+            if (plain.isEmpty() || plain.startsWith("ERROR")) { logD("🔴 Token 解密失败"); ui { binding.tvValUni.text = "解密失败" }; return }
             val tokenValue = extractTokenFromJson(plain)
             logD("🎫 Token: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
             ui { binding.tvValUni.text = if (tokenValue.isNotEmpty()) tokenValue else "(空)" }
@@ -609,8 +611,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun encryptByAESSync(plaintext: String): String {
         val lock = CountDownLatch(1); val result = arrayOf("")
-        val escaped = plaintext.replace("'", "\\'")
-        ui { webView.evaluateJavascript("encryptByAES('$DEF_HOSPITAL_ID','$escaped')") { res -> result[0] = (res ?: "").removeSurrounding("\""); lock.countDown() } }
+        ui { webView.evaluateJavascript("encryptByAES('$DEF_HOSPITAL_ID','${plaintext.replace("'", "\\'")}')") { res -> result[0] = (res ?: "").removeSurrounding("\""); lock.countDown() } }
         lock.await(5, TimeUnit.SECONDS)
         return result[0]
     }
