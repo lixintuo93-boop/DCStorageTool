@@ -753,7 +753,7 @@ class MainActivity : AppCompatActivity() {
                 logD("🔐 cache.account 密文长度=${cipher1.length}")
                 val p = decryptByAesSync(cipher1)
                 logD("🔓 cache.account 明文: ${p.take(60)}")
-                val m = Regex("\"?mobile\"?\\s*:\\s*\"?([^\",}]+?)\"?").find(p)?.groupValues?.get(1) ?: ""
+                val m = Regex("\"?mobile\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
                 if (m.isNotEmpty()) { sb.append("📱 $m"); ui { binding.tvValPhone.text = m }; logD("📱 手机号: $m") }
             } else { logD("⚠️ 未找到 cache.account 键") }
             c1.close()
@@ -764,7 +764,7 @@ class MainActivity : AppCompatActivity() {
                 logD("🔐 default.member 密文长度=${cipher2.length}")
                 val p = decryptByAesSync(cipher2)
                 logD("🔓 default.member 明文: ${p.take(80)}")
-                val n = Regex("\"?name\"?\\s*:\\s*\"([^\"]*)\"").find(p)?.groupValues?.get(1) ?: ""
+                val n = Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
                 if (n.isNotEmpty()) { sb.append(n); logD("👤 主患者: $n") }
             } else { logD("⚠️ 未找到 default.member 键") }
             c2.close()
@@ -775,7 +775,7 @@ class MainActivity : AppCompatActivity() {
                 logD("🔐 app.session 密文长度=${cipher3.length}")
                 val s = decryptByAesSync(cipher3)
                 logD("🔓 app.session 明文: ${s.take(80)}")
-                for (m in Regex("\"?name\"?\\s*:\\s*\"([^\"]*)\"").findAll(s)) {
+                for (m in Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").findAll(s)) {
                     val name = m.groupValues[1]
                     if (sb.isNotEmpty() && !sb.contains(name)) { sb.append("\n👤 $name"); logD("👤 家庭成员: $name") }
                     else if (sb.isEmpty()) { sb.append("👤 $name"); logD("👤 $name") }
