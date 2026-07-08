@@ -75,13 +75,8 @@ class MainActivity : AppCompatActivity() {
             loadUrl("file:///android_asset/index.html")
         }
 
+        binding.btnGenerate.setOnClickListener { doRead() }
         binding.btnWrite.setOnClickListener { doWrite() }
-        binding.btnGenerate.setOnClickListener {
-            suppressWatcher = true
-            binding.etNewUuid.setText(UUID.randomUUID().toString())
-            suppressWatcher = false
-            updateStatus(normalizeUuid(binding.etNewUuid.text.toString()))
-        }
         binding.btnClearLog.setOnClickListener {
             binding.tvDebug.text = ""
             logD("(日志已清空)")
@@ -341,42 +336,41 @@ class MainActivity : AppCompatActivity() {
 
     private fun doWrite() {
         val raw = binding.etNewUuid.text.toString()
-        val norm = normalizeUuid(raw)
-        when (norm) {
-            is NormResult.Empty -> {
-                toast("请输入新的 UUID")
-                return
-            }
-            is NormResult.Invalid -> {
-                toast("UUID 不合规：${norm.msg}")
-                logD("🔴 写入被拒：${norm.msg}")
-                return
-            }
-            is NormResult.Valid -> {
-                if (norm.canonical != raw) {
-                    suppressWatcher = true
-                    binding.etNewUuid.setText(norm.canonical)
-                    suppressWatcher = false
-                    updateStatus(norm)
-                }
+        // 解析多行输入：第一行可能是 UUID，后面的行可能是 token
+        val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
+        var newUuid: String? = null
+        var newToken: String? = null
+        for (line in lines) {
+            val norm = normalizeUuid(line)
+            if (norm is NormResult.Valid) {
+                if (newUuid == null) newUuid = norm.canonical
+            } else if (norm is NormResult.Invalid || line.length > 10) {
+                // 不是合法 UUID 且足够长 → 可能是 token
+                if (newToken == null) newToken = line
             }
         }
-        val newVal = (norm as NormResult.Valid).canonical
+
+        if (newUuid == null && newToken == null) {
+            toast("请粘贴 UUID 和/或 Token（换行分隔）")
+            return
+        }
 
         Thread {
-            logD("───── 写入 ${newVal} ─────")
+            if (newUuid != null) logD("───── 写入 UUID: $newUuid ─────")
+            if (newToken != null) logD("───── 写入 Token: ${newToken?.let { if (it.length <= 60) it else it.take(25) + "…" + it.takeLast(25)} } ─────")
 
             // 1. force-stop 目标 App
             val fs = suFull("am force-stop $TARGET_PKG")
             logD("🛑 force-stop 退出码=${fs.first}${if (fs.third.isNotEmpty()) " err=${fs.third}" else ""}")
 
+            var dbWriteOk = false; var dcOk = false; var uniOk = false
+
+            if (newUuid != null) {
             // 2. 定位三处存储
             val realDbPath = findDbPath()
             val dcFile     = findDcFile()
             val uniXml     = findUniPref()
-            logD("📁 db=$realDbPath")
-            logD("📁 dc=$dcFile")
-            logD("📁 uni=$uniXml")
+            logD("📁 db=$realDbPath"); logD("📁 dc=$dcFile"); logD("📁 uni=$uniXml")
 
             // 3. 拷 DCStorage 到 cache，读旧密文
             val tmp   = tmpDb.absolutePath
@@ -385,7 +379,8 @@ class MainActivity : AppCompatActivity() {
             val cpOk = su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'")
             if (!cpOk || !File(tmp).exists()) {
                 logD("🔴 复制 DCStorage 失败")
-                ui { toast("复制数据库失败") }; return@Thread
+                ui { toast("复制数据库失败") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
 
             var oldEncrypted: String? = null
@@ -404,8 +399,9 @@ class MainActivity : AppCompatActivity() {
                 logD("🔴 读旧 DCStorage 出错: ${e.message}")
             }
             if (tableName == null) {
-                logD("🔴 找不到主表，终止")
-                ui { toast("未找到数据表") }; return@Thread
+                logD("🔴 找不到主表，终止 UUID 写入")
+                ui { toast("未找到数据表") }
+                writeTokenToSp(newToken); doRead(); return@Thread
             }
 
             // 4. 读 .DC*.txt 和 __UNI__*.xml 旧值
@@ -426,9 +422,9 @@ class MainActivity : AppCompatActivity() {
             logD("🔗 与 DCStorage 比对 dc=${if (dcSame) "相同→修改" else "不同→保持"} uni=${if (uniSame) "相同→修改" else "不同→保持"}")
 
             // 不再按各处旧格式适配，三处统一写入规范形式（8-4-4-4-12 带- 小写）
-            val newForDb  = newVal
-            val newForDc  = newVal
-            val newForUni = newVal
+            val newForDb  = newUuid
+            val newForDc  = newUuid
+            val newForUni = newUuid
             logD("✏️ 即将写入 db=$newForDb")
             if (dcSame)  logD("✏️ 即将写入 dc=$newForDc")
             if (uniSame) logD("✏️ 即将写入 uni=$newForUni")
@@ -526,43 +522,113 @@ class MainActivity : AppCompatActivity() {
             }
 
             logD("───── 完成 db=${if (dbWriteOk) "✓" else "✗"} dc=${if (dcOk) "✓" else if (dcSame) "✗" else "保持"} uni=${if (uniOk) "✓" else if (uniSame) "✗" else "保持"} ─────")
-
-            ui {
-                // 刷新三处显示：改了的显示新值，没改的显示原值
-                binding.tvValDb.text = newForDb
-                binding.tvValDc.text = when {
-                    dcFile == null -> "未找到"
-                    dcOk           -> newForDc
-                    else           -> if (dcOld.isNotEmpty()) dcOld else "(空)"
-                }
-                binding.tvValUni.text = when {
-                    uniXml == null      -> "未找到"
-                    uniOld.isEmpty()    -> "无该键"
-                    uniOk               -> newForUni
-                    else                -> uniOld
-                }
-
-                val sb = StringBuilder("写入完成\n")
-                sb.append("DCStorage: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
-                sb.append("DCFile: ")
-                  .append(when {
-                      dcFile == null -> "未找到"
-                      dcOk           -> "✓"
-                      dcSame         -> "✗"
-                      else           -> "不同·保持"
-                  })
-                  .append('\n')
-                sb.append("UniPref: ")
-                  .append(when {
-                      uniXml == null   -> "未找到"
-                      uniOld.isEmpty() -> "无 Key"
-                      uniOk            -> "✓"
-                      uniSame          -> "✗"
-                      else             -> "不同·保持"
-                  })
-                toast(sb.toString())
             }
+
+            val tokenOk = writeTokenToSp(newToken)
+
+            val sb = StringBuilder("写入完成\n")
+            if (newUuid != null) sb.append("UUID: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
+            if (newToken != null) sb.append("Token: ").append(if (tokenOk) "✓" else "✗")
+            ui { toast(sb.toString().trim()) }
+
+            logD("🔄 写入完成，重新从磁盘读取...")
+            doRead()
         }.start()
+    }
+
+    private fun writeTokenToSp(newToken: String?): Boolean {
+        if (newToken == null) return false
+        try {
+            val spFile = findTokenSpFile() ?: run { logD("🔴 未找到 token SP 文件"); return false }
+            logD("🔑 Token SP: $spFile")
+            var actualKey: String? = null; var oldCipher: String? = null
+            for (mode in listOf("production", "debug")) {
+                val key = "$DEF_HOSPITAL_ID.$mode.app.session"
+                val v = extractSpValue(spFile, key)
+                if (v != null) { actualKey = key; oldCipher = v; break }
+            }
+            if (actualKey == null || oldCipher == null) { logD("🔴 未找到 app.session 键"); return false }
+            val oldJson = decryptByAesSync(oldCipher)
+            if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { logD("🔴 解密旧 token 失败"); return false }
+            val newJson = replaceTokenInJson(oldJson, newToken)
+            val newCipher = encryptByAESSync(newJson)
+            if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { logD("🔴 加密新 token 失败"); return false }
+            val eOld = oldCipher.replace("/", "\\/").replace("&", "\\&")
+            val eNew = newCipher.replace("/", "\\/").replace("&", "\\&")
+            val uid = suOut("stat -c '%u' '$spFile'").trim()
+            val gid = suOut("stat -c '%g' '$spFile'").trim()
+            val ok = su("sed -i 's|<string name=\"$actualKey\">$eOld</string>|<string name=\"$actualKey\">$eNew</string>|' '$spFile'")
+            if (ok && uid.isNotEmpty()) { val g = if (gid.isNotEmpty()) gid else uid; su("chown $uid:$g '$spFile'"); su("chmod 660 '$spFile'") }
+            val match = extractSpValue(spFile, actualKey) == newCipher
+            logD("💾 Token 写入 ${if (ok && match) "✓" else "✗"}")
+            return ok && match
+        } catch (e: Exception) { Log.e(TAG, "write token error", e); return false }
+    }
+
+    private fun replaceTokenInJson(json: String, newToken: String): String {
+        var j = json.trim()
+        while (j.startsWith("\"") && j.endsWith("\"")) j = j.substring(1, j.length - 1).trim()
+        val regex = Regex("\"token\"\\s*:\\s*\"[^\"]*\"")
+        if (regex.containsMatchIn(j)) return regex.replaceFirst(j, "\"token\":\"$newToken\"")
+        if (j.endsWith("}")) return j.substring(0, j.length - 1) + ",\"token\":\"$newToken\"}"
+        return j
+    }
+
+    private fun findTokenSpFile(): String? {
+        val out = suFull("grep -rl 'app\\.session' $DATA_DIR/shared_prefs/ 2>/dev/null").second
+        out.lines().firstOrNull { it.isNotBlank() }?.let { return it }
+        for (name in listOf("PandoraEntry.xml", "dcloud_storage.xml", "pdr.xml")) {
+            val path = "$DATA_DIR/shared_prefs/$name"
+            if (su("test -f '$path'") && suOut("grep -c 'app.session' '$path' 2>/dev/null").trim() != "0") return path
+        }
+        for (line in suOut("ls $DATA_DIR/shared_prefs/*.xml 2>/dev/null").lines().map { it.trim() }.filter { it.isNotBlank() }) {
+            if (suOut("grep -c 'app.session' '$line' 2>/dev/null").trim() != "0") return line
+        }
+        return null
+    }
+
+    private fun extractSpValue(spPath: String, key: String): String? {
+        val out = suOut("sed -n 's|.*<string name=\"$key\">\\([^<]*\\)</string>.*|\\1|p' '$spPath' 2>/dev/null").trim()
+        return if (out.isNotEmpty()) out else null
+    }
+
+    private fun readToken() {
+        try {
+            val spFile = findTokenSpFile() ?: run { logD("⚠️ 未找到 token 存储"); ui { binding.tvValUni.text = "未找到" }; return }
+            logD("🔑 Token SP: $spFile")
+            var cv: String? = null
+            for (mode in listOf("production", "debug")) {
+                cv = extractSpValue(spFile, "$DEF_HOSPITAL_ID.$mode.app.session")
+                if (cv != null) break
+            }
+            if (cv == null) { logD("⚠️ 无 app.session"); ui { binding.tvValUni.text = "无数据" }; return }
+            val plain = decryptByAesSync(cv)
+            if (plain.isEmpty() || plain.startsWith("ERROR")) { ui { binding.tvValUni.text = "解密失败" }; return }
+            val tokenValue = extractTokenFromJson(plain)
+            logD("🎫 Token: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
+            ui { binding.tvValUni.text = if (tokenValue.isNotEmpty()) tokenValue else "(空)" }
+        } catch (e: Exception) { Log.e(TAG, "read token error", e); ui { binding.tvValUni.text = "读取错误" } }
+    }
+
+    private fun extractTokenFromJson(json: String): String {
+        var j = json.trim()
+        while (j.startsWith("\"") && j.endsWith("\"")) j = j.substring(1, j.length - 1)
+        return Regex("\"token\"\\s*:\\s*\"([^\"]*)\"").find(j)?.groupValues?.get(1) ?: j
+    }
+
+    private fun decryptByAesSync(cipherText: String): String {
+        val lock = CountDownLatch(1); val result = arrayOf("")
+        ui { webView.evaluateJavascript("decryptByAes('${cipherText.replace("'", "\\'")}','$DEF_HOSPITAL_ID')") { res -> result[0] = (res ?: "").removeSurrounding("\"").replace("\\\"", ""); lock.countDown() } }
+        lock.await(5, TimeUnit.SECONDS)
+        return result[0]
+    }
+
+    private fun encryptByAESSync(plaintext: String): String {
+        val lock = CountDownLatch(1); val result = arrayOf("")
+        val escaped = plaintext.replace("'", "\\'")
+        ui { webView.evaluateJavascript("encryptByAES('$DEF_HOSPITAL_ID','$escaped')") { res -> result[0] = (res ?: "").removeSurrounding("\""); lock.countDown() } }
+        lock.await(5, TimeUnit.SECONDS)
+        return result[0]
     }
 
     // ─── 同步包装 WebView JS 调用 ─────────────────────────────────
