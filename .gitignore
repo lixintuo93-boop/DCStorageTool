@@ -7,7 +7,6 @@ local.properties
 *.iml
 .idea/
 .gradle/
-node_modules/
 
 # Key files (security)
 *.jks
