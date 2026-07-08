@@ -336,15 +336,21 @@ class MainActivity : AppCompatActivity() {
     /** 从完整登录响应中提取 value 对象 */
     private fun tryExtractValue(raw: String): String {
         val t = raw.trim()
-        // 如果包含 \"value\":{ 则提取 value 对象
         val m = Regex("\"value\"\\s*:\\s*").find(t)
         if (m != null) {
             val start = m.range.last + 1
             if (start < t.length && t[start] == '{') {
-                val inner = extractJsonObject(t.substring(start), "")
-                if (inner != null) return inner
-                // fallback: 尝试从完整字符串中提取
-                return extractJsonObject(t, "value") ?: t
+                // 手动提取 {...} 对象
+                var pos = start; var depth = 0; val sb = StringBuilder()
+                while (pos < t.length) {
+                    val c = t[pos]; sb.append(c)
+                    when {
+                        c == '{' -> depth++
+                        c == '}' -> { depth--; if (depth == 0) return sb.toString() }
+                        c == '"' -> { pos++; while (pos < t.length && t[pos] != '"') { if (t[pos] == '\\') pos++; pos++ } }
+                    }
+                    pos++
+                }
             }
         }
         return t
