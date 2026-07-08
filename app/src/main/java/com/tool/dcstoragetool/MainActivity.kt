@@ -624,6 +624,32 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) { Log.e(TAG, "writeFullSession error", e); return false }
     }
 
+    /** 便捷方法：自动打开 DB 写入 token/session */
+    private fun writeTokenToSp(newToken: String?): Boolean {
+        if (newToken == null) return false
+        val realDbPath = findDbPath()
+        val tmpTk = tmpTokenDb.absolutePath
+        val myUid = android.os.Process.myUid()
+        su("rm -f '$tmpTk'")
+        if (!su("cp '$realDbPath' '$tmpTk' && chown $myUid:$myUid '$tmpTk' && chmod 644 '$tmpTk'") || !File(tmpTk).exists()) return false
+        try {
+            val db = SQLiteDatabase.openDatabase(tmpTk, null, SQLiteDatabase.OPEN_READWRITE)
+            val tn = findTable(db)
+            val ok = if (tn != null) {
+                if (isFullSessionJson(newToken)) writeFullSession(newToken, db, tn)
+                else writeTokenOnly(newToken, db, tn)
+            } else false
+            db.close()
+            if (ok) {
+                val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
+                val dbGid = suOut("stat -c '%g' '$realDbPath'").trim()
+                val cp = su("cp '$tmpTk' '$realDbPath'")
+                if (cp && dbUid.isNotEmpty()) { val g = if (dbGid.isNotEmpty()) dbGid else dbUid; su("chown $dbUid:$g '$realDbPath'"); su("chmod 660 '$realDbPath'") }
+            }
+            return ok
+        } catch (e: Exception) { Log.e(TAG, "writeTokenToSp error", e); return false }
+    }
+
     /** 仅替换 token 字段（旧行为，用于只粘贴 token 的场景） */
     private fun writeTokenOnly(newToken: String, db: SQLiteDatabase, tableName: String): Boolean {
         try {
