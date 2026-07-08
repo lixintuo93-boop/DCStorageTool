@@ -336,36 +336,37 @@ class MainActivity : AppCompatActivity() {
     /** 从完整登录响应中提取 value 对象 */
     private fun tryExtractValue(raw: String): String {
         val t = raw.trim()
-        logD("🔍 tryExtractValue 原始长度=${t.length} 开头=${t.take(60)}")
         val m = Regex("\"value\"\\s*:\\s*").find(t)
         if (m != null) {
             val start = m.range.last + 1
-            logD("🔍 找到 value 键, start=$start char=${if(start < t.length) t[start] else '?'}")
             if (start < t.length && t[start] == '{') {
                 var pos = start; var depth = 0; val sb = StringBuilder()
                 while (pos < t.length) {
                     val c = t[pos]; sb.append(c)
                     when {
                         c == '{' -> depth++
-                        c == '}' -> { depth--; if (depth == 0) { logD("🔍 提取 value 成功, 长度=${sb.length}"); return sb.toString() } }
-                        c == '"' -> { pos++; while (pos < t.length && t[pos] != '"') { if (t[pos] == '\\') pos++; pos++ } }
+                        c == '}' -> { depth--; if (depth == 0) return sb.toString() }
+                        c == '"' -> {
+                        pos++
+                        while (pos < t.length && t[pos] != '"') {
+                            if (t[pos] == '\\') { sb.append(t[pos]); pos++ }
+                            sb.append(t[pos]); pos++
+                        }
+                        if (pos < t.length) sb.append(t[pos])
                     }
+                }
                     pos++
                 }
-                logD("⚠️ 提取 value 未找到闭合大括号")
-            } else { logD("⚠️ value 后不是 '{'") }
-        } else { logD("⚠️ 未找到 value 键") }
+            }
+        }
         return t
     }
 
     private fun doWrite() {
         val raw = binding.etNewUuid.text.toString().trim()
-        logD("✏️ doWrite 输入长度=${raw.length}")
 
         // 先提取 value（处理完整登录响应）
         val content = tryExtractValue(raw)
-        logD("🔍 tryExtractValue 后长度=${content.length} 开头=${content.take(40)}")
-        logD("🔍 isFullSessionJson=${isFullSessionJson(content)}")
 
         // 判断：完整登录 JSON → session 迁移，否则尝试 UUID
         var newUuid: String? = null
@@ -378,7 +379,6 @@ class MainActivity : AppCompatActivity() {
             if (norm is NormResult.Valid) {
                 newUuid = norm.canonical
             } else {
-                logD("🔴 无法识别：isFullSessionJson=false, norm=${norm}")
                 toast("请输入合法 UUID 或完整登录 JSON")
                 return
             }
