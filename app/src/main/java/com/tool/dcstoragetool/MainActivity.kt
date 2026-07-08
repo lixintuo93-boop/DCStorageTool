@@ -619,8 +619,13 @@ class MainActivity : AppCompatActivity() {
 
     /** 从 JSON 串中提取指定 key 的字符串值 */
     private fun extractJsonString(json: String, key: String): String {
-        val m = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(json)
-        return m?.groupValues?.get(1)?.replace("\\\"", "\"")?.replace("\\\\", "\\") ?: ""
+        // 先匹配带引号的字符串值
+        val mStr = Regex("\"$key\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"").find(json)
+        if (mStr != null) return mStr.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
+        // 再匹配不带引号的数字/布尔值
+        val mNum = Regex("\"$key\"\\s*:\\s*(-?[0-9]+|true|false|null)").find(json)
+        if (mNum != null) return mNum.groupValues[1]
+        return ""
     }
 
     /** 从 JSON 中提取嵌套对象 {...} */
