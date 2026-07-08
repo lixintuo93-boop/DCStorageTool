@@ -87,6 +87,20 @@ class MainActivity : AppCompatActivity() {
             cm.setPrimaryClip(ClipData.newPlainText("DCStorageTool Log", binding.tvDebug.text))
             toast("日志已复制到剪贴板")
         }
+        binding.btnPaste.setOnClickListener {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            if (cm.hasPrimaryClip()) {
+                val clip = cm.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                if (clip.isNotEmpty()) {
+                    binding.etNewUuid.setText(clip)
+                    logD("📋 已粘贴剪贴板内容")
+                }
+            }
+        }
+        binding.btnClearInput.setOnClickListener {
+            binding.etNewUuid.text.clear()
+            logD("🗑 输入已清空")
+        }
 
         attachUuidWatcher()
         logD("📱 DCStorageTool 启动 | target=$TARGET_PKG")
@@ -314,6 +328,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 readToken()
+                readAccountInfo()
             } catch (e: Exception) {
                 Log.e(TAG, "read error", e)
                 logD("🔴 读取异常: ${e.message}")
@@ -719,6 +734,94 @@ class MainActivity : AppCompatActivity() {
             logD("🎫 Token: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
             ui { binding.tvValUni.text = if (tokenValue.isNotEmpty()) tokenValue else "(空)" }
         } catch (e: Exception) { Log.e(TAG, "read token error", e); ui { binding.tvValUni.text = "读取错误" } }
+    }
+
+    /** 读取手机号和患者姓名 */
+    private fun readAccountInfo() {
+        try {
+            val realDbPath = findDbPath()
+            val tmp = tmpTokenDb.absolutePath
+            val myUid = android.os.Process.myUid()
+            su("rm -f '$tmp'")
+            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
+                ui { binding.tvValPhone.text = "读取失败"; binding.tvValAccount.text = "读取失败" }; return
+            }
+            val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
+            val tableName = findTable(db)
+            if (tableName == null) { db.close(); ui { binding.tvValPhone.text = "未找到"; binding.tvValAccount.text = "未找到" }; return }
+
+            val sb = StringBuilder()
+
+            // 1. 读取手机号 (cache.account)
+            val phoneCur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
+            if (phoneCur.moveToFirst()) {
+                val p = decryptByAesSync(phoneCur.getString(0))
+                val mobile = extractJsonString(p, "mobile")
+                if (mobile.isNotEmpty()) {
+                    sb.append("📱 $mobile")
+                    ui { binding.tvValPhone.text = mobile }
+                }
+            }
+            phoneCur.close()
+
+            // 2. 读取患者姓名 (default.member)
+            val memberCur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
+            if (memberCur.moveToFirst()) {
+                val m = decryptByAesSync(memberCur.getString(0))
+                val name = extractJsonString(m, "name")
+                val sex = extractJsonString(m, "sex")
+                val age = extractJsonString(m, "age")
+                if (name.isNotEmpty()) {
+                    val displayName = if (sex.isNotEmpty() && age.isNotEmpty()) "$name ($sex/$age岁)"
+                    else if (sex.isNotEmpty()) "$name ($sex)" else name
+                    sb.append(displayName)
+                }
+            }
+            memberCur.close()
+
+            // 3. 读取家庭成员 (app.session → patientVoList)
+            val sessionCur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
+            if (sessionCur.moveToFirst()) {
+                val s = decryptByAesSync(sessionCur.getString(0))
+                // 提取 patientVoList 数组中的姓名
+                val listJson = extractJsonArray(s, "patientVoList")
+                if (listJson != null) {
+                    val regex = Regex("\"name\"\\s*:\\s*\"([^\"]*)\"")
+                    val names = regex.findAll(listJson).map { it.groupValues[1] }.toList()
+                    for (name in names) {
+                        if (sb.isNotEmpty()) sb.append("\n")
+                        sb.append("👤 $name")
+                    }
+                }
+            }
+            sessionCur.close()
+            db.close()
+
+            val text = sb.toString()
+            if (text.isNotEmpty()) {
+                ui { binding.tvValAccount.text = text }
+                logD("👤 账号信息: ${text.replace("\n", ", ")}")
+            } else {
+                ui { binding.tvValAccount.text = "无数据" }
+            }
+        } catch (e: Exception) { Log.e(TAG, "read account info error", e) }
+    }
+
+    /** 从 JSON 中提取数组 [...] 的原始文本 */
+    private fun extractJsonArray(json: String, key: String): String? {
+        val idx = json.indexOf("\"$key\"")
+        if (idx < 0) return null
+        var pos = json.indexOf('[', idx)
+        if (pos < 0) return null
+        var depth = 0; val sb = StringBuilder()
+        while (pos < json.length) {
+            val c = json[pos]; sb.append(c)
+            if (c == '[') depth++
+            else if (c == ']') { depth--; if (depth == 0) return sb.toString() }
+            else if (c == '"') { sb.append(c); pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
+            pos++
+        }
+        return null
     }
 
     private fun extractTokenFromJson(json: String): String {

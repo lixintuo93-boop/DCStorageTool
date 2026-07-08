@@ -12,7 +12,7 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- 当前 UUID -->
+        <!-- 当前账号信息 -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,7 +29,61 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="当前设备 ID（三处）"
+                    android:text="当前账号"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    android:textColor="#1565C0"
+                    android:layout_marginBottom="8dp"/>
+
+                <TextView
+                    android:id="@+id/tv_val_phone"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="12sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#1B5E20"
+                    android:textIsSelectable="true"
+                    android:padding="6dp"
+                    android:background="#E8F5E9"
+                    android:maxLines="1"
+                    android:ellipsize="end"/>
+
+                <TextView
+                    android:id="@+id/tv_val_account"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#4E342E"
+                    android:textIsSelectable="true"
+                    android:padding="6dp"
+                    android:background="#EFEBE9"
+                    android:layout_marginTop="4dp"
+                    android:maxLines="5"
+                    android:ellipsize="end"/>
+            </LinearLayout>
+        </androidx.cardview.widget.CardView>
+
+        <!-- 当前设备信息 -->
+        <androidx.cardview.widget.CardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            app:cardElevation="4dp"
+            app:cardCornerRadius="10dp"
+            android:layout_marginBottom="10dp"
+            android:layout_marginTop="8dp">
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="12dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="当前设备信息"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
@@ -147,11 +201,44 @@
                     android:textSize="12sp"
                     android:inputType="textMultiLine"
                     android:background="@null"
-                    android:minLines="3"
-                    android:maxLines="8"
+                    android:minLines="5"
+                    android:maxLines="10"
                     android:gravity="top"
                     android:paddingVertical="4dp"
                     android:scrollbars="vertical"/>
+
+                <!-- 清空 / 粘贴 按钮 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="end"
+                    android:layout_marginTop="4dp">
+                    <Button
+                        android:id="@+id/btn_paste"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:minWidth="48dp"
+                        android:paddingHorizontal="6dp"
+                        android:text="粘贴"
+                        android:textSize="10sp"
+                        android:backgroundTint="#78909C"
+                        android:layout_marginEnd="4dp"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"/>
+                    <Button
+                        android:id="@+id/btn_clear_input"
+                        android:layout_width="wrap_content"
+                        android:layout_height="28dp"
+                        android:minWidth="48dp"
+                        android:paddingHorizontal="6dp"
+                        android:text="清空"
+                        android:textSize="10sp"
+                        android:backgroundTint="#90A4AE"
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"/>
+                </LinearLayout>
+
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
