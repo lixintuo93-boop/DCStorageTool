@@ -754,7 +754,7 @@ class MainActivity : AppCompatActivity() {
                 val p = decryptByAesSync(cipher1)
                 logD("🔓 cache.account 明文: ${p.take(60)}")
                 val m = Regex("\"?mobile\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
-                if (m.isNotEmpty()) { sb.append("📱 $m"); ui { binding.tvValPhone.text = m }; logD("📱 手机号: $m") }
+                if (m.isNotEmpty()) { sb.append("手机号：$m"); ui { binding.tvValPhone.text = "手机号：$m" }; logD("📱 手机号: $m") }
             } else { logD("⚠️ 未找到 cache.account 键") }
             c1.close()
             // 主患者
@@ -765,7 +765,7 @@ class MainActivity : AppCompatActivity() {
                 val p = decryptByAesSync(cipher2)
                 logD("🔓 default.member 明文: ${p.take(80)}")
                 val n = Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
-                if (n.isNotEmpty()) { sb.append(n); logD("👤 主患者: $n") }
+                if (n.isNotEmpty()) { sb.append("患者：$n"); logD("👤 患者: $n") }
             } else { logD("⚠️ 未找到 default.member 键") }
             c2.close()
             // 家庭成员
@@ -777,8 +777,7 @@ class MainActivity : AppCompatActivity() {
                 logD("🔓 app.session 明文: ${s.take(80)}")
                 for (m in Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").findAll(s)) {
                     val name = m.groupValues[1]
-                    if (sb.isNotEmpty() && !sb.contains(name)) { sb.append("\n👤 $name"); logD("👤 家庭成员: $name") }
-                    else if (sb.isEmpty()) { sb.append("👤 $name"); logD("👤 $name") }
+                    if (!sb.contains(name)) { sb.append(", $name"); logD("👤 家庭成员: $name") }
                 }
             } else { logD("⚠️ 未找到 app.session 键") }
             c3.close(); db.close()
