@@ -677,10 +677,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val db = SQLiteDatabase.openDatabase(tmpTk, null, SQLiteDatabase.OPEN_READWRITE)
             val tn = findTable(db)
-            val ok = if (tn != null) {
-                if (isFullSessionJson(newToken)) writeFullSession(newToken, db, tn)
-                else writeTokenOnly(newToken, db, tn)
-            } else false
+            val ok = if (tn != null) writeFullSession(newToken, db, tn) else false
             db.close()
             if (ok) {
                 val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
