@@ -87,6 +87,14 @@ class MainActivity : AppCompatActivity() {
             cm.setPrimaryClip(ClipData.newPlainText("DCStorageTool Log", binding.tvDebug.text))
             toast("日志已复制到剪贴板")
         }
+        binding.btnPaste.setOnClickListener {
+            val cm2 = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            if (cm2.hasPrimaryClip()) {
+                val clip = cm2.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                if (clip.isNotEmpty()) binding.etNewUuid.setText(clip)
+            }
+        }
+        binding.btnClearInput.setOnClickListener { binding.etNewUuid.text.clear() }
 
         attachUuidWatcher()
         logD("📱 DCStorageTool 启动 | target=$TARGET_PKG")
@@ -314,6 +322,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 readToken()
+                readAccountInfo()
             } catch (e: Exception) {
                 Log.e(TAG, "read error", e)
                 logD("🔴 读取异常: ${e.message}")
@@ -719,6 +728,52 @@ class MainActivity : AppCompatActivity() {
             logD("🎫 Token: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
             ui { binding.tvValUni.text = if (tokenValue.isNotEmpty()) tokenValue else "(空)" }
         } catch (e: Exception) { Log.e(TAG, "read token error", e); ui { binding.tvValUni.text = "读取错误" } }
+    }
+
+    private fun readAccountInfo() {
+        try {
+            val realDbPath = findDbPath()
+            val tmp = tmpTokenDb.absolutePath
+            val myUid = android.os.Process.myUid()
+            su("rm -f '$tmp'")
+            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) return
+            val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
+            val tableName = findTable(db) ?: run { db.close(); return }
+
+            val sb = StringBuilder()
+            // 手机号
+            val c1 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
+            if (c1.moveToFirst()) {
+                val p = decryptByAesSync(c1.getString(0))
+                val m = Regex("\"mobile\"\\s*:\\s*\"([^\"]*)\"").find(p)?.groupValues?.get(1) ?: ""
+                if (m.isNotEmpty()) { sb.append("📱 $m"); ui { binding.tvValPhone.text = m } }
+            }
+            c1.close()
+            // 主患者
+            val c2 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
+            if (c2.moveToFirst()) {
+                val p = decryptByAesSync(c2.getString(0))
+                val n = Regex("\"name\"\\s*:\\s*\"([^\"]*)\"").find(p)?.groupValues?.get(1) ?: ""
+                if (n.isNotEmpty()) { sb.append(n) }
+            }
+            c2.close()
+            // 家庭成员
+            val c3 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
+            if (c3.moveToFirst()) {
+                val s = decryptByAesSync(c3.getString(0))
+                for (m in Regex("\"name\"\\s*:\\s*\"([^\"]*)\"").findAll(s)) {
+                    val name = m.groupValues[1]
+                    if (sb.isNotEmpty() && !sb.contains(name)) { sb.append("\n"); sb.append("👤 $name") }
+                    else if (sb.isEmpty()) sb.append("👤 $name")
+                }
+            }
+            c3.close(); db.close()
+            val text = sb.toString()
+            if (text.isNotEmpty()) {
+                ui { binding.tvValAccount.text = text }
+                logD("👤 账号信息: ${text.replace("\n", ", ")}")
+            }
+        } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e) }
     }
 
     private fun extractTokenFromJson(json: String): String {
