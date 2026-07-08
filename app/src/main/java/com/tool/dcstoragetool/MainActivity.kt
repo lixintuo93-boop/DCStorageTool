@@ -745,48 +745,43 @@ class MainActivity : AppCompatActivity() {
             if (tableName == null) { db.close(); logD("⚠️ 未找到主表（账号读取）"); return }
             logD("📋 账号表: $tableName")
 
-            val sb = StringBuilder()
             // 手机号
+            var phoneOk = false
             val c1 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
             if (c1.moveToFirst()) {
-                val cipher1 = c1.getString(0)
-                logD("🔐 cache.account 密文长度=${cipher1.length}")
-                val p = decryptByAesSync(cipher1)
-                logD("🔓 cache.account 明文: ${p.take(60)}")
+                val p = decryptByAesSync(c1.getString(0))
+                logD("🔓 cache.account: $p")
                 val m = Regex("\"?mobile\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
-                if (m.isNotEmpty()) { sb.append("手机号：$m"); ui { binding.tvValPhone.text = "手机号：$m" }; logD("📱 手机号: $m") }
-            } else { logD("⚠️ 未找到 cache.account 键") }
+                if (m.isNotEmpty()) { ui { binding.tvValPhone.text = "手机号：$m" }; phoneOk = true; logD("📱 $m") }
+            }
             c1.close()
-            // 主患者
+
+            // 患者姓名（主患者 + 家庭成员，顿号分隔）
+            val names = mutableListOf<String>()
             val c2 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
             if (c2.moveToFirst()) {
-                val cipher2 = c2.getString(0)
-                logD("🔐 default.member 密文长度=${cipher2.length}")
-                val p = decryptByAesSync(cipher2)
-                logD("🔓 default.member 明文: ${p.take(80)}")
+                val p = decryptByAesSync(c2.getString(0))
+                logD("🔓 default.member: $p")
                 val n = Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").find(p)?.groupValues?.get(1) ?: ""
-                if (n.isNotEmpty()) { sb.append("患者：$n"); logD("👤 患者: $n") }
-            } else { logD("⚠️ 未找到 default.member 键") }
+                if (n.isNotEmpty()) names.add(n)
+            }
             c2.close()
-            // 家庭成员
             val c3 = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
             if (c3.moveToFirst()) {
-                val cipher3 = c3.getString(0)
-                logD("🔐 app.session 密文长度=${cipher3.length}")
-                val s = decryptByAesSync(cipher3)
-                logD("🔓 app.session 明文: ${s.take(80)}")
+                val s = decryptByAesSync(c3.getString(0))
+                logD("🔓 app.session: $s")
                 for (m in Regex("\"?name\"?\\s*:\\s*\"?([^\",}]+)\"?").findAll(s)) {
                     val name = m.groupValues[1]
-                    if (!sb.contains(name)) { sb.append(", $name"); logD("👤 家庭成员: $name") }
+                    if (!names.contains(name)) names.add(name)
                 }
-            } else { logD("⚠️ 未找到 app.session 键") }
+            }
             c3.close(); db.close()
-            val text = sb.toString()
-            if (text.isNotEmpty()) {
-                ui { binding.tvValAccount.text = text }
-                logD("👤 账号信息完成: ${text.replace("\n", ", ")}")
-            } else {
-                logD("⚠️ 账号信息为空")
+
+            if (names.isNotEmpty()) {
+                ui { binding.tvValAccount.text = "患者：" + names.joinToString("、") }
+                logD("👤 患者: ${names.joinToString("、")}")
+            }
+            if (!phoneOk && names.isEmpty()) {
                 ui { binding.tvValAccount.text = "无数据" }
             }
         } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e); logD("🔴 readAccountInfo 异常: ${e.message}") }
