@@ -266,6 +266,14 @@ class MainActivity : AppCompatActivity() {
     private fun doRead() {
         Thread {
             logD("───── 读取 ─────")
+            // 先清空所有显示，防止旧数据残留在 UI
+            ui {
+                binding.tvValDb.text = "—"
+                binding.tvValDc.text = "—"
+                binding.tvValPhone.text = "—"
+                binding.tvValAccount.text = "—"
+                binding.tvValUni.text = "—"
+            }
             val tmp   = tmpDb.absolutePath
             val myUid = android.os.Process.myUid()
 
@@ -279,7 +287,11 @@ class MainActivity : AppCompatActivity() {
 
             if (!cpOk || !tmpFile.exists()) {
                 logD("🔴 复制数据库到 cache 失败")
-                ui { binding.tvValDb.text = "—"; toast("复制数据库失败") }
+                ui {
+                    binding.tvValDb.text = "—"; binding.tvValDc.text = "—"
+                    binding.tvValPhone.text = "—"; binding.tvValAccount.text = "—"; binding.tvValUni.text = "—"
+                    toast("复制数据库失败")
+                }
                 return@Thread
             }
 
@@ -326,7 +338,14 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "read error", e)
                 logD("🔴 读取异常: ${e.message}")
-                ui { binding.tvValDb.text = "—"; toast("读取错误: ${e.message}") }
+                ui {
+                    binding.tvValDb.text = "—"
+                    binding.tvValDc.text = "—"
+                    binding.tvValPhone.text = "—"
+                    binding.tvValAccount.text = "—"
+                    binding.tvValUni.text = "—"
+                    toast("读取错误: ${e.message}")
+                }
             }
         }.start()
     }
@@ -358,6 +377,7 @@ class MainActivity : AppCompatActivity() {
                     pos++
                 }
             }
+        }
         }
         return t
     }
@@ -703,21 +723,21 @@ class MainActivity : AppCompatActivity() {
             val myUid = android.os.Process.myUid()
             su("rm -f '$tmp'")
             if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
-                logD("⚠️ 复制 DCStorage 失败（token 读取）"); ui { binding.tvValUni.text = "读取失败" }; return
+                logD("⚠️ 复制 DCStorage 失败（session 读取）"); ui { binding.tvValUni.text = "—" }; return
             }
             val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READONLY)
             val tableName = findTable(db)
-            if (tableName == null) { db.close(); logD("⚠️ 未找到主表"); ui { binding.tvValUni.text = "未找到" }; return }
+            if (tableName == null) { db.close(); logD("⚠️ 未找到主表"); ui { binding.tvValUni.text = "—" }; return }
             val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
             if (!cur.moveToFirst()) { cur.close(); db.close(); logD("⚠️ 无 app.session 键"); ui { binding.tvValUni.text = "无数据" }; return }
             val cipher = cur.getString(0); cur.close(); db.close()
-            logD("🔐 Token 密文长度=${cipher.length}")
+            logD("🔐 Session 密文长度=${cipher.length}")
             val plain = decryptByAesSync(cipher)
-            if (plain.isEmpty() || plain.startsWith("ERROR")) { logD("🔴 Token 解密失败"); ui { binding.tvValUni.text = "解密失败" }; return }
+            if (plain.isEmpty() || plain.startsWith("ERROR")) { logD("🔴 Session 解密失败"); ui { binding.tvValUni.text = "解密失败" }; return }
             val tokenValue = extractTokenFromJson(plain)
-            logD("🎫 Token: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
+            logD("🎫 Session: ${if (tokenValue.length <= 60) tokenValue else tokenValue.take(25) + "…" + tokenValue.takeLast(25)}")
             ui { binding.tvValUni.text = if (tokenValue.isNotEmpty()) tokenValue else "(空)" }
-        } catch (e: Exception) { Log.e(TAG, "read token error", e); ui { binding.tvValUni.text = "读取错误" } }
+        } catch (e: Exception) { Log.e(TAG, "read session error", e); ui { binding.tvValUni.text = "—" } }
     }
 
     private fun readAccountInfo() {
@@ -774,7 +794,7 @@ class MainActivity : AppCompatActivity() {
             if (!phoneOk && names.isEmpty()) {
                 ui { binding.tvValAccount.text = "无数据" }
             }
-        } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e); logD("🔴 readAccountInfo 异常: ${e.message}") }
+        } catch (e: Exception) { Log.e(TAG, "readAccountInfo error", e); ui { binding.tvValPhone.text = "—"; binding.tvValAccount.text = "—" } }
     }
 
     private fun extractTokenFromJson(json: String): String {
