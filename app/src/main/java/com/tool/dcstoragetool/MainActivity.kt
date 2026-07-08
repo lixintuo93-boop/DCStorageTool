@@ -639,7 +639,7 @@ class MainActivity : AppCompatActivity() {
             val c = json[pos]; sb.append(c)
             if (c == '{') depth++
             else if (c == '}') { depth--; if (depth == 0) return sb.toString() }
-            else if (c == '"') { sb.append(c); pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
+            else if (c == '"') { pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
             pos++
         }
         return null
