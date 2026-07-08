@@ -17,6 +17,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.tool.dcstoragetool.databinding.ActivityMainBinding
 import java.io.File
+import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -509,11 +510,41 @@ class MainActivity : AppCompatActivity() {
             logD("───── 完成 db=${if (dbWriteOk) "✓" else "✗"} dc=${if (dcOk) "✓" else if (dcSame) "✗" else "保持"} uni=${if (uniOk) "✓" else if (uniSame) "✗" else "保持"} ─────")
             }
 
-            val tokenOk = writeTokenToSp(newToken)
+            // ─── 写入 Token / Session ───
+            var tokenOk = false
+            if (newToken != null) {
+                val realDbPath = findDbPath()
+                val tmpTk = tmpTokenDb.absolutePath
+                val myUid = android.os.Process.myUid()
+                su("rm -f '$tmpTk'")
+                if (su("cp '$realDbPath' '$tmpTk' && chown $myUid:$myUid '$tmpTk' && chmod 644 '$tmpTk'") && File(tmpTk).exists()) {
+                    try {
+                        val db = SQLiteDatabase.openDatabase(tmpTk, null, SQLiteDatabase.OPEN_READWRITE)
+                        val tableName = findTable(db)
+                        if (tableName != null) {
+                            if (isFullSessionJson(newToken)) {
+                                logD("📦 检测到完整登录 JSON，执行账号迁移...")
+                                tokenOk = writeFullSession(newToken, db, tableName, newUuid != null)
+                            } else {
+                                logD("🔑 仅替换 token 字段...")
+                                tokenOk = writeTokenOnly(newToken, db, tableName)
+                            }
+                        } else { logD("🔴 未找到主表") }
+                        db.close()
+                        if (tokenOk) {
+                            val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
+                            val dbGid = suOut("stat -c '%g' '$realDbPath'").trim()
+                            val ok = su("cp '$tmpTk' '$realDbPath'")
+                            if (ok && dbUid.isNotEmpty()) { val g = if (dbGid.isNotEmpty()) dbGid else dbUid; su("chown $dbUid:$g '$realDbPath'"); su("chmod 660 '$realDbPath'") }
+                            logD("💾 Session 写回 ${if (ok) "✓" else "✗"}")
+                        }
+                    } catch (e: Exception) { Log.e(TAG, "write session error", e) }
+                } else { logD("🔴 复制 DCStorage 失败（session 写入）") }
+            }
 
             val sb = StringBuilder("写入完成\n")
             if (newUuid != null) sb.append("UUID: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
-            if (newToken != null) sb.append("Token: ").append(if (tokenOk) "✓" else "✗")
+            if (newToken != null) sb.append(if (isFullSessionJson(newToken)) "账号迁移" else "Token").append(": ").append(if (tokenOk) "✓" else "✗")
             ui { toast(sb.toString().trim()) }
 
             logD("🔄 写入完成，重新从磁盘读取...")
@@ -521,46 +552,97 @@ class MainActivity : AppCompatActivity() {
         }.start()
     }
 
-    /** 从 DCStorage 数据库中读取/写入 token（key = {hospitalId}.product.app.session） */
-    private fun writeTokenToSp(newToken: String?): Boolean {
-        if (newToken == null) return false
+    /** 判断输入是否为完整登录 JSON（包含 token + id 字段） */
+    private fun isFullSessionJson(s: String): Boolean {
+        return try {
+            val j = JSONObject(s.trim())
+            j.has("token") && j.has("id")
+        } catch (e: Exception) { false }
+    }
+
+    /** 写入完整 session JSON + 同步关联 key。如果已单独写入 UUID 则跳过 deviceId */
+    private fun writeFullSession(sessionJson: String, db: SQLiteDatabase, tableName: String, skipDeviceId: Boolean = false): Boolean {
+        try {
+            val sessionObj = JSONObject(sessionJson)
+            val newToken = sessionObj.optString("token", "")
+            val newDeviceId = sessionObj.optString("deviceId", "")
+            val newMobile = sessionObj.optString("mobile", "")
+            val newAccountId = sessionObj.optString("id", "")
+            val defaultPatient = sessionObj.optJSONObject("defaultPatient")
+
+            // 1. 写入 app.session
+            val sessionCipher = encryptByAESSync(sessionJson)
+            if (sessionCipher.isEmpty() || sessionCipher.startsWith("ERROR")) {
+                logD("🔴 加密 session 失败"); return false
+            }
+            var cv = ContentValues().apply { put("value", sessionCipher) }
+            db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.app.session"))
+            logD("💾 app.session 已写入")
+
+            // 2. 同步 deviceId 到 DCStorage（如果用户未单独指定 UUID）
+            if (!skipDeviceId && newDeviceId.isNotEmpty()) {
+                val deviceCipher = encryptSync(newDeviceId)
+                if (deviceCipher.isNotEmpty() && !deviceCipher.startsWith("ERROR")) {
+                    cv = ContentValues().apply { put("value", deviceCipher) }
+                    db.update(tableName, cv, "key=?", arrayOf(DEF_DB_KEY))
+                    logD("💾 deviceId 已同步: $newDeviceId")
+                }
+            }
+
+            // 3. 同步 cache.account (mobile)
+            if (newMobile.isNotEmpty()) {
+                val accountJson = "{\"mobile\":\"$newMobile\"}"
+                val accountCipher = encryptByAESSync(accountJson)
+                if (accountCipher.isNotEmpty() && !accountCipher.startsWith("ERROR")) {
+                    cv = ContentValues().apply { put("value", accountCipher) }
+                    db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.cache.account"))
+                    logD("💾 cache.account 已同步")
+                }
+            }
+
+            // 4. 同步 default.member (defaultPatient)
+            if (defaultPatient != null) {
+                val memberJson = defaultPatient.toString()
+                val memberCipher = encryptByAESSync(memberJson)
+                if (memberCipher.isNotEmpty() && !memberCipher.startsWith("ERROR")) {
+                    cv = ContentValues().apply { put("value", memberCipher) }
+                    db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.member"))
+                    logD("💾 default.member 已同步")
+                }
+
+                // 5. 同步 default.peopleId
+                val peopleId = defaultPatient.optString("id", "")
+                if (peopleId.isNotEmpty()) {
+                    val peopleCipher = encryptByAESSync(peopleId)
+                    if (peopleCipher.isNotEmpty() && !peopleCipher.startsWith("ERROR")) {
+                        cv = ContentValues().apply { put("value", peopleCipher) }
+                        db.update(tableName, cv, "key=?", arrayOf("$DEF_HOSPITAL_ID.product.default.peopleId"))
+                        logD("💾 default.peopleId 已同步: $peopleId")
+                    }
+                }
+            }
+
+            return true
+        } catch (e: Exception) { Log.e(TAG, "writeFullSession error", e); return false }
+    }
+
+    /** 仅替换 token 字段（旧行为，用于只粘贴 token 的场景） */
+    private fun writeTokenOnly(newToken: String, db: SQLiteDatabase, tableName: String): Boolean {
         try {
             val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
-            val realDbPath = findDbPath()
-            val tmp = tmpTokenDb.absolutePath
-            val myUid = android.os.Process.myUid()
-            su("rm -f '$tmp'")
-            if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
-                logD("🔴 复制 DCStorage 失败（token 写入）"); return false
-            }
-            var tableName: String? = null; var oldCipher: String? = null
-            try {
-                val db = SQLiteDatabase.openDatabase(tmp, null, SQLiteDatabase.OPEN_READWRITE)
-                tableName = findTable(db)
-                if (tableName != null) {
-                    val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
-                    if (cur.moveToFirst()) oldCipher = cur.getString(0)
-                    cur.close()
-                }
-                if (tableName == null || oldCipher == null) { db.close(); logD("🔴 未找到 token 键: $tokenKey"); return false }
-                val oldJson = decryptByAesSync(oldCipher)
-                if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { db.close(); logD("🔴 解密旧 token 失败"); return false }
-                val newJson = replaceTokenInJson(oldJson, newToken)
-                val newCipher = encryptByAESSync(newJson)
-                if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { db.close(); logD("🔴 加密新 token 失败"); return false }
-                val cv = ContentValues().apply { put("value", newCipher) }
-                val rows = db.update(tableName, cv, "key=?", arrayOf(tokenKey))
-                db.close()
-                logD("💾 Token rows updated = $rows")
-                if (rows <= 0) return false
-            } catch (e: Exception) { Log.e(TAG, "write token db error", e); return false }
-            val dbUid = suOut("stat -c '%u' '$realDbPath'").trim()
-            val dbGid = suOut("stat -c '%g' '$realDbPath'").trim()
-            val ok = su("cp '$tmp' '$realDbPath'")
-            if (ok && dbUid.isNotEmpty()) { val g = if (dbGid.isNotEmpty()) dbGid else dbUid; su("chown $dbUid:$g '$realDbPath'"); su("chmod 660 '$realDbPath'") }
-            logD("💾 Token 写入 ${if (ok) "✓" else "✗"}")
-            return ok
-        } catch (e: Exception) { Log.e(TAG, "write token error", e); return false }
+            val cur = db.rawQuery("SELECT value FROM $tableName WHERE key=?", arrayOf(tokenKey))
+            if (!cur.moveToFirst()) { cur.close(); logD("🔴 未找到 app.session 键"); return false }
+            val oldCipher = cur.getString(0); cur.close()
+            val oldJson = decryptByAesSync(oldCipher)
+            if (oldJson.isEmpty() || oldJson.startsWith("ERROR")) { logD("🔴 解密旧 token 失败"); return false }
+            val newJson = replaceTokenInJson(oldJson, newToken)
+            val newCipher = encryptByAESSync(newJson)
+            if (newCipher.isEmpty() || newCipher.startsWith("ERROR")) { logD("🔴 加密新 token 失败"); return false }
+            val cv = ContentValues().apply { put("value", newCipher) }
+            db.update(tableName, cv, "key=?", arrayOf(tokenKey))
+            logD("💾 Token 已替换")
+            return true
+        } catch (e: Exception) { Log.e(TAG, "writeTokenOnly error", e); return false }
     }
 
     private fun replaceTokenInJson(json: String, newToken: String): String {

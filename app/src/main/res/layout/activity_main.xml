@@ -132,7 +132,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="新 UUID / Token（可单独或一起粘贴，换行分隔）"
+                    android:text="新 UUID / Token / 登录JSON（换行分隔，自动识别）"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
@@ -142,7 +142,7 @@
                     android:id="@+id/et_new_uuid"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="粘贴 UUID 和/或 Token&#10;例如：&#10;xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&#10;eyJhbGciOiJIUzI1NiJ9..."
+                    android:hint="粘贴 UUID/Token/登录JSON&#10;换行分隔，自动识别类型&#10;完整登录JSON自动迁移账号"
                     android:fontFamily="monospace"
                     android:textSize="12sp"
                     android:inputType="textMultiLine"
