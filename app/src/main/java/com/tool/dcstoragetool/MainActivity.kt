@@ -595,12 +595,25 @@ class MainActivity : AppCompatActivity() {
         if (idx < 0) return null
         var pos = json.indexOf('{', idx)
         if (pos < 0) return null
-        var depth = 0; val sb = StringBuilder()
+        var depth = 0
+        val sb = StringBuilder()
         while (pos < json.length) {
-            val c = json[pos]; sb.append(c)
-            if (c == '{') depth++
-            else if (c == '}') { depth--; if (depth == 0) return sb.toString() }
-            else if (c == '"') { sb.append(c); pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
+            val c = json[pos]
+            sb.append(c)
+            when {
+                c == '{' -> depth++
+                c == '}' -> { depth--; if (depth == 0) return sb.toString() }
+                c == '"' -> {
+                    sb.append(c)
+                    pos++
+                    while (pos < json.length && json[pos] != '"') {
+                        if (json[pos] == '\\') { sb.append(json[pos]); pos++ }
+                        sb.append(json[pos])
+                        pos++
+                    }
+                    if (pos < json.length) sb.append(json[pos])
+                }
+            }
             pos++
         }
         return null
@@ -813,12 +826,25 @@ class MainActivity : AppCompatActivity() {
         if (idx < 0) return null
         var pos = json.indexOf('[', idx)
         if (pos < 0) return null
-        var depth = 0; val sb = StringBuilder()
+        var depth = 0
+        val sb = StringBuilder()
         while (pos < json.length) {
-            val c = json[pos]; sb.append(c)
-            if (c == '[') depth++
-            else if (c == ']') { depth--; if (depth == 0) return sb.toString() }
-            else if (c == '"') { sb.append(c); pos++; while (pos < json.length && json[pos] != '"') { if (json[pos] == '\\') { sb.append(json[pos]); pos++ }; sb.append(json[pos]); pos++ }; if (pos < json.length) sb.append(json[pos]) }
+            val c = json[pos]
+            sb.append(c)
+            when {
+                c == '[' -> depth++
+                c == ']' -> { depth--; if (depth == 0) return sb.toString() }
+                c == '"' -> {
+                    sb.append(c)
+                    pos++
+                    while (pos < json.length && json[pos] != '"') {
+                        if (json[pos] == '\\') { sb.append(json[pos]); pos++ }
+                        sb.append(json[pos])
+                        pos++
+                    }
+                    if (pos < json.length) sb.append(json[pos])
+                }
+            }
             pos++
         }
         return null
