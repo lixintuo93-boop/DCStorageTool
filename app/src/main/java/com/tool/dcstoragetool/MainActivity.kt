@@ -611,22 +611,22 @@ class MainActivity : AppCompatActivity() {
                 val devId = extractJsonString(json, "deviceId")
                 if (devId.isNotEmpty()) {
                     val c = encryptSync(devId)
-                    if (c.isNotEmpty() && !c.startsWith("ERROR")) { put(DEF_DB_KEY, c); logD("💾 deviceId 已同步: $devId") }
+                    if (c.isNotEmpty() && !c.startsWith("ERROR")) { insertOrReplace(DEF_DB_KEY, c); logD("💾 deviceId 已同步: $devId") }
                 }
             }
 
             val mobile = extractJsonString(json, "mobile")
             if (mobile.isNotEmpty()) {
                 val c = encryptByAESSync("{\"mobile\":\"$mobile\"}")
-                if (c.isNotEmpty() && !c.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.cache.account", c); logD("💾 cache.account 已同步") }
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { insertOrReplace("$DEF_HOSPITAL_ID.product.cache.account", c); logD("💾 cache.account 已同步") }
             }
 
             val patient = extractJsonObject(json, "defaultPatient")
             if (patient != null) {
                 val c = encryptByAESSync(patient)
-                if (c.isNotEmpty() && !c.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.default.member", c); logD("💾 default.member 已同步") }
+                if (c.isNotEmpty() && !c.startsWith("ERROR")) { insertOrReplace("$DEF_HOSPITAL_ID.product.default.member", c); logD("💾 default.member 已同步") }
                 val pid = extractJsonString(patient, "id")
-                if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { put("$DEF_HOSPITAL_ID.product.default.peopleId", pc); logD("💾 default.peopleId 已同步: $pid") } }
+                if (pid.isNotEmpty()) { val pc = encryptByAESSync(pid); if (pc.isNotEmpty() && !pc.startsWith("ERROR")) { insertOrReplace("$DEF_HOSPITAL_ID.product.default.peopleId", pc); logD("💾 default.peopleId 已同步: $pid") } }
             }
 
             // 同步 .DC 文件和 XML
