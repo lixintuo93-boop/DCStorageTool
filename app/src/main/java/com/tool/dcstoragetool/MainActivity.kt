@@ -736,8 +736,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun encryptByAESSync(plaintext: String): String {
         val lock = CountDownLatch(1); val result = arrayOf("")
-        ui { webView.evaluateJavascript("encryptByAES('$DEF_HOSPITAL_ID','${plaintext.replace("'", "\\'")}')") { res -> result[0] = (res ?: "").removeSurrounding("\""); lock.countDown() } }
+        // 移除换行，只保留空格，然后转义单引号
+        val safeText = plaintext.replace("\n", " ").replace("\r", " ").replace("'", "\\'")
+        ui { webView.evaluateJavascript("encryptByAES('$DEF_HOSPITAL_ID','$safeText')") { res ->
+            var v = res ?: ""
+            if (v.startsWith("\"") && v.endsWith("\"")) v = v.substring(1, v.length - 1)
+            v = v.replace("\\\"", "\"")
+            result[0] = v; lock.countDown()
+        } }
         lock.await(5, TimeUnit.SECONDS)
+        if (result[0].isEmpty() || result[0] == "null") { logD("🔴 encryptByAESSync 返回异常"); return "ERROR:加密结果为空" }
         return result[0]
     }
 
