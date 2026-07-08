@@ -20,7 +20,6 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -353,12 +352,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        val newUuid = (parsed.uuidNorm as? NormResult.Valid)?.canonical
+        val uuid = (parsed.uuidNorm as? NormResult.Valid)?.canonical
         val newToken = parsed.token
+        val tk   = newToken
 
         Thread {
-            if (newUuid != null) logD("───── 写入 UUID: $newUuid ─────")
-            if (newToken != null) logD("───── 写入 Token: ${maskToken(newToken)} ─────")
+            if (uuid != null) logD("───── 写入 UUID: $uuid ─────")
+            if (tk != null) logD("───── 写入 Token: ${maskToken(tk)} ─────")
 
             // 1. force-stop 目标 App
             val fs = suFull("am force-stop $TARGET_PKG")
@@ -368,7 +368,7 @@ class MainActivity : AppCompatActivity() {
             var dcOk = false
             var uniOk = false
 
-            if (newUuid != null) {
+            if (uuid != null) {
             // 2. 定位三处存储
             val realDbPath = findDbPath()
             val dcFile     = findDcFile()
@@ -427,7 +427,7 @@ class MainActivity : AppCompatActivity() {
             logD("🔗 与 DCStorage 比对 dc=${if (dcSame) "相同→修改" else "不同→保持"} uni=${if (uniSame) "相同→修改" else "不同→保持"}")
 
             // 6. 加密 DCStorage 新值
-            val newEncrypted = encryptSync(newUuid)
+            val newEncrypted = encryptSync(uuid)
             if (newEncrypted.isEmpty() || newEncrypted.startsWith("ERROR")) {
                 logD("🔴 加密失败: $newEncrypted")
                 ui { toast("加密失败") }
@@ -473,14 +473,14 @@ class MainActivity : AppCompatActivity() {
             dcOk = if (dcFile != null && dcSame) {
                 val uid = suOut("stat -c '%u' '$dcFile'").trim()
                 val gid = suOut("stat -c '%g' '$dcFile'").trim()
-                val ok  = su("printf '%s' '$newUuid' > '$dcFile'")
+                val ok  = su("printf '%s' '$uuid' > '$dcFile'")
                 if (ok && uid.isNotEmpty()) {
                     val g = if (gid.isNotEmpty()) gid else uid
                     su("chown $uid:$g '$dcFile'")
                     su("chmod 600 '$dcFile'")
                 }
                 val verify = suOut("cat '$dcFile' 2>/dev/null").trim()
-                val match = verify == newUuid
+                val match = verify == uuid
                 logD("💾 .DC 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
             } else if (dcFile == null) {
@@ -497,7 +497,7 @@ class MainActivity : AppCompatActivity() {
                 val gid = suOut("stat -c '%g' '$uniXml'").trim()
                 val ok  = su(
                     "sed -i 's|<string name=\"android_device_dcloud_id\">[^<]*</string>" +
-                    "|<string name=\"android_device_dcloud_id\">$newUuid</string>|' '$uniXml'"
+                    "|<string name=\"android_device_dcloud_id\">$uuid</string>|' '$uniXml'"
                 )
                 if (ok && uid.isNotEmpty()) {
                     val g = if (gid.isNotEmpty()) gid else uid
@@ -507,7 +507,7 @@ class MainActivity : AppCompatActivity() {
                 val verify = suOut(
                     "sed -n 's|.*<string name=\"android_device_dcloud_id\">\\([^<]*\\)</string>.*|\\1|p' '$uniXml' 2>/dev/null"
                 ).trim()
-                val match = verify == newUuid
+                val match = verify == uuid
                 logD("💾 Uni 写入 ${if (ok && match) "✓" else "✗"} (校验 ${if (match) "一致" else "不一致 verify=${mask(verify)}"})")
                 ok && match
             } else if (uniXml == null) {
@@ -525,11 +525,11 @@ class MainActivity : AppCompatActivity() {
             }
 
             // ─── 写入 Token（如果提供了） ───
-            val tokenOk = writeTokenToSp(newToken)
+            val tokenOk = writeTokenToSp(tk)
 
             val sb = StringBuilder("写入完成\n")
-            if (newUuid != null) sb.append("UUID: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
-            if (newToken != null) sb.append("Token: ").append(if (tokenOk) "✓" else "✗")
+            if (uuid != null) sb.append("UUID: ").append(if (dbWriteOk) "✓" else "✗").append('\n')
+            if (tk != null) sb.append("Token: ").append(if (tokenOk) "✓" else "✗")
             ui { toast(sb.toString().trim()) }
 
             logD("🔄 写入完成，重新从磁盘读取...")
