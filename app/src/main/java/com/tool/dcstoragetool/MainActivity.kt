@@ -320,18 +320,24 @@ class MainActivity : AppCompatActivity() {
     // ─── 写入 ────────────────────────────────────────────────────
 
     private fun doWrite() {
-        val raw = binding.etNewUuid.text.toString()
-        // 解析多行输入：第一行可能是 UUID，后面的行可能是 token
-        val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
+        val raw = binding.etNewUuid.text.toString().trim()
+
         var newUuid: String? = null
         var newToken: String? = null
-        for (line in lines) {
-            val norm = normalizeUuid(line)
-            if (norm is NormResult.Valid) {
-                if (newUuid == null) newUuid = norm.canonical
-            } else if (norm is NormResult.Invalid || line.length > 10) {
-                // 不是合法 UUID 且足够长 → 可能是 token
-                if (newToken == null) newToken = line
+
+        // 先判断整体是否为完整登录 JSON（避免把 JSON 内的 deviceId 误提取为 UUID）
+        if (isFullSessionJson(raw)) {
+            newToken = raw
+        } else {
+            // 解析多行输入：每行分别看是 UUID 还是 token
+            val lines = raw.lines().map { it.trim() }.filter { it.isNotBlank() }
+            for (line in lines) {
+                val norm = normalizeUuid(line)
+                if (norm is NormResult.Valid) {
+                    if (newUuid == null) newUuid = norm.canonical
+                } else if (norm is NormResult.Invalid || line.length > 10) {
+                    if (newToken == null) newToken = line
+                }
             }
         }
 
