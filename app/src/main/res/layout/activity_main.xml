@@ -12,7 +12,7 @@
         android:orientation="vertical"
         android:padding="12dp">
 
-        <!-- 当前设备信息 -->
+        <!-- 当前 UUID -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -29,7 +29,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="当前设备信息"
+                    android:text="当前设备 ID（三处）"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
@@ -88,27 +88,28 @@
                     app:autoSizeMaxTextSize="11sp"
                     app:autoSizeStepGranularity="1sp"/>
 
-                <!-- Token -->
+                <!-- Uni 偏好 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="Token"
+                    android:text="Uni 偏好 (android_device_dcloud_id)"
                     android:textSize="10sp"
                     android:textColor="#607D8B"
                     android:layout_marginTop="6dp"/>
                 <TextView
-                    android:id="@+id/tv_val_token"
+                    android:id="@+id/tv_val_uni"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="—"
                     android:textSize="11sp"
                     android:fontFamily="monospace"
-                    android:textColor="#E65100"
+                    android:textColor="#6A1B9A"
                     android:textIsSelectable="true"
                     android:padding="6dp"
-                    android:background="#FFF3E0"
-                    android:maxLines="3"
-                    android:ellipsize="end"
+                    android:background="#F3E5F5"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="middle"
                     app:autoSizeTextType="uniform"
                     app:autoSizeMinTextSize="8sp"
                     app:autoSizeMaxTextSize="11sp"
@@ -116,7 +117,7 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 输入区域：UUID + Token（多行） -->
+        <!-- 新 UUID -->
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -132,26 +133,28 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="新 UUID / Token（可单独或一起粘贴）"
+                    android:text="新 UUID"
                     android:textStyle="bold"
                     android:textSize="13sp"
                     android:textColor="#1565C0"
                     android:layout_marginBottom="4dp"/>
 
                 <EditText
-                    android:id="@+id/et_input"
+                    android:id="@+id/et_new_uuid"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="粘贴 UUID 和/或 Token，换行分隔&#10;例如：&#10;xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx&#10;eyJhbGciOiJIUzI1NiJ9..."
+                    android:hint="粘贴 / 输入新的 UUID"
                     android:fontFamily="monospace"
                     android:textSize="12sp"
-                    android:inputType="textMultiLine"
+                    android:inputType="text"
                     android:background="@null"
-                    android:minLines="3"
-                    android:maxLines="8"
-                    android:gravity="top"
+                    android:singleLine="true"
+                    android:maxLines="1"
                     android:paddingVertical="4dp"
-                    android:scrollbars="vertical"/>
+                    app:autoSizeTextType="uniform"
+                    app:autoSizeMinTextSize="8sp"
+                    app:autoSizeMaxTextSize="13sp"
+                    app:autoSizeStepGranularity="1sp"/>
                 <View
                     android:layout_width="match_parent"
                     android:layout_height="1dp"
@@ -166,8 +169,9 @@
                     android:layout_marginTop="6dp"
                     android:text=""
                     android:textColor="#757575"
-                    android:singleLine="false"
-                    android:maxLines="3"
+                    android:singleLine="true"
+                    android:maxLines="1"
+                    android:ellipsize="end"
                     app:autoSizeTextType="uniform"
                     app:autoSizeMinTextSize="7sp"
                     app:autoSizeMaxTextSize="11sp"
@@ -175,20 +179,20 @@
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
-        <!-- 读取 + 写入 -->
+        <!-- 生成 + 写入 -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:layout_marginBottom="10dp">
             <Button
-                android:id="@+id/btn_read"
+                android:id="@+id/btn_generate"
                 android:layout_width="0dp"
                 android:layout_weight="1"
                 android:layout_height="44dp"
-                android:text="读  取"
+                android:text="随机 UUID"
                 android:textSize="13sp"
-                android:backgroundTint="#2E7D32"
+                android:backgroundTint="#546E7A"
                 android:layout_marginEnd="6dp"/>
             <Button
                 android:id="@+id/btn_write"
