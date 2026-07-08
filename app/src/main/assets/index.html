@@ -51,28 +51,15 @@
         }
     }
 
-    /**
-     * 加密（用于 token / SharedPreferences 存储）
-     * plaintext 不额外包裹引号
-     */
     function encryptByAES(hospitalId, plaintext) {
         try {
             var key = CryptoJS.enc.Latin1.parse(hospitalId + '@zk');
             var iv  = CryptoJS.enc.Latin1.parse(hospitalId + '@kz');
-            var enc = CryptoJS.AES.encrypt(
-                CryptoJS.enc.Utf8.parse(plaintext),
-                key,
-                { iv: iv, padding: CryptoJS.pad.ZeroPadding }
-            );
+            var enc = CryptoJS.AES.encrypt(CryptoJS.enc.Utf8.parse(plaintext), key, { iv: iv, padding: CryptoJS.pad.ZeroPadding });
             return enc.toString();
-        } catch (e) {
-            return 'ERROR:' + e.message;
-        }
+        } catch (e) { return 'ERROR:' + e.message; }
     }
 
-    /**
-     * 解密（用于 token / SharedPreferences 存储）
-     */
     function decryptByAes(cipherText, hospitalId) {
         return decrypt(hospitalId, cipherText);
     }
