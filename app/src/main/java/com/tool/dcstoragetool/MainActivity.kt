@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
 
     private val tmpDb get() = File(cacheDir, "DCStorage_tmp")
+    private val tmpTokenDb get() = File(cacheDir, "DCStorage_tmp_token")
     private val logFmt = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
 
     private var suppressWatcher = false
@@ -526,7 +527,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
             val realDbPath = findDbPath()
-            val tmp = tmpDb.absolutePath
+            val tmp = tmpTokenDb.absolutePath
             val myUid = android.os.Process.myUid()
             su("rm -f '$tmp'")
             if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
@@ -575,7 +576,7 @@ class MainActivity : AppCompatActivity() {
         try {
             val tokenKey = "$DEF_HOSPITAL_ID.product.app.session"
             val realDbPath = findDbPath()
-            val tmp = tmpDb.absolutePath
+            val tmp = tmpTokenDb.absolutePath
             val myUid = android.os.Process.myUid()
             su("rm -f '$tmp'")
             if (!su("cp '$realDbPath' '$tmp' && chown $myUid:$myUid '$tmp' && chmod 644 '$tmp'") || !File(tmp).exists()) {
