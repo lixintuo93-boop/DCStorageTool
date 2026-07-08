@@ -63,6 +63,27 @@
                     android:layout_marginTop="4dp"
                     android:maxLines="5"
                     android:ellipsize="end"/>
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Session"
+                    android:textSize="10sp"
+                    android:textColor="#607D8B"
+                    android:layout_marginTop="6dp"/>
+                <TextView
+                    android:id="@+id/tv_val_uni"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="—"
+                    android:textSize="11sp"
+                    android:fontFamily="monospace"
+                    android:textColor="#E65100"
+                    android:textIsSelectable="true"
+                    android:padding="6dp"
+                    android:background="#FFF3E0"
+                    android:maxLines="3"
+                    android:ellipsize="end"/>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
@@ -142,31 +163,6 @@
                     app:autoSizeMaxTextSize="11sp"
                     app:autoSizeStepGranularity="1sp"/>
 
-                <!-- Token -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Token"
-                    android:textSize="10sp"
-                    android:textColor="#607D8B"
-                    android:layout_marginTop="6dp"/>
-                <TextView
-                    android:id="@+id/tv_val_uni"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:text="—"
-                    android:textSize="11sp"
-                    android:fontFamily="monospace"
-                    android:textColor="#E65100"
-                    android:textIsSelectable="true"
-                    android:padding="6dp"
-                    android:background="#FFF3E0"
-                    android:maxLines="3"
-                    android:ellipsize="end"
-                    app:autoSizeTextType="uniform"
-                    app:autoSizeMinTextSize="8sp"
-                    app:autoSizeMaxTextSize="11sp"
-                    app:autoSizeStepGranularity="1sp"/>
             </LinearLayout>
         </androidx.cardview.widget.CardView>
 
